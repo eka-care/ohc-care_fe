@@ -11,10 +11,9 @@ on:
 
 env:
   # TODO(devops): existing dev bucket to reuse, and the prefix for this app
-  BUCKET_LOCATION: REPLACE_WITH_EXISTING_DEV_BUCKET   # e.g. m-dev-elixir-... (no s3:// prefix)
-  S3_BASE: ohc-care-fe                                # base prefix in the shared bucket; channels: main (live) + <tag> (archives)
-  # TODO(devops): CloudFront distribution that fronts the above bucket
-  DISTRIBUTION_ID: REPLACE_WITH_DISTRIBUTION_ID       # e.g. E258O583I1XMM5
+  BUCKET_LOCATION: ""                                 # TODO(devops): elixir dev bucket for this app (elixir uses per-app buckets, e.g. elixir-dev-*); no s3:// prefix
+  S3_BASE: ohc-care-fe                                # base prefix in the bucket; channels: main (live) + <tag> (archives)
+  DISTRIBUTION_ID: ""                                 # TODO(devops): fill after CloudFront is created
 
 jobs:
   build-react:

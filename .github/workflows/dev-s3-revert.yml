@@ -13,9 +13,9 @@ on:
         default: ''
 
 env:
-  BUCKET_LOCATION: REPLACE_WITH_EXISTING_DEV_BUCKET   # same bucket as dev-s3-deploy.yml
+  BUCKET_LOCATION: ""                                 # TODO(devops): same bucket as dev-s3-deploy.yml
   S3_BASE: ohc-care-fe
-  DISTRIBUTION_ID: REPLACE_WITH_DISTRIBUTION_ID       # same distribution as dev-s3-deploy.yml
+  DISTRIBUTION_ID: ""                                 # TODO(devops): same distribution as dev-s3-deploy.yml
 
 jobs:
   revert:
