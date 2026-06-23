@@ -12,7 +12,7 @@ on:
 env:
   # TODO(devops): existing dev bucket to reuse, and the prefix for this app
   BUCKET_LOCATION: REPLACE_WITH_EXISTING_DEV_BUCKET   # e.g. m-dev-elixir-... (no s3:// prefix)
-  S3_PREFIX: ohc-care-fe/main                         # new prefix inside the shared bucket (elixir uses <app>/main)
+  S3_BASE: ohc-care-fe                                # base prefix in the shared bucket; channels: main (live) + <tag> (archives)
   # TODO(devops): CloudFront distribution that fronts the above bucket
   DISTRIBUTION_ID: REPLACE_WITH_DISTRIBUTION_ID       # e.g. E258O583I1XMM5
 
@@ -54,23 +54,23 @@ jobs:
           npm run build
           ls -la build
 
-      - name: Sync to S3
+      - name: Sync to S3 (archive + live)
         env:
           IMAGE_TAG: ${{ steps.get_version.outputs.VERSION }}
         run: |
-          DEST="s3://${BUCKET_LOCATION}/${S3_PREFIX}"
-          # Hashed, immutable assets — long cache. --delete prunes stale files under the prefix.
-          aws s3 sync build/ "$DEST" --delete \
-            --cache-control "public,max-age=31536000,immutable" \
-            --exclude "*.html"
-          # index.html / html — never cache (SPA entrypoint must always be fresh).
-          aws s3 sync build/ "$DEST" \
-            --cache-control "no-cache, must-revalidate" \
-            --exclude "*" --include "*.html"
-          echo "Deployed ${IMAGE_TAG} to ${DEST}"
+          ARCHIVE="s3://${BUCKET_LOCATION}/${S3_BASE}/${IMAGE_TAG}"
+          LIVE="s3://${BUCKET_LOCATION}/${S3_BASE}/main"
+          # 1. Immutable per-release archive — never overwritten, the revert source. NO --delete.
+          aws s3 sync build/ "$ARCHIVE" --cache-control "public,max-age=31536000,immutable"
+          # 2. Live channel — NO --delete (keeps old hashed assets so previous releases remain revertable).
+          aws s3 sync build/ "$LIVE" --cache-control "public,max-age=31536000,immutable" --exclude "*.html"
+          # 3. index.html on live must never be cached (SPA entrypoint).
+          aws s3 cp build/index.html "$LIVE/index.html" \
+            --cache-control "no-cache, must-revalidate" --content-type "text/html"
+          echo "Archived ${IMAGE_TAG} → ${ARCHIVE}; promoted to ${LIVE}"
 
       - name: Invalidate CloudFront
         run: |
           aws cloudfront create-invalidation \
             --distribution-id "$DISTRIBUTION_ID" \
-            --paths "/${S3_PREFIX}/*"
+            --paths "/${S3_BASE}/main/*"
