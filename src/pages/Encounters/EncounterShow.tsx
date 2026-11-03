@@ -29,6 +29,10 @@ import { EncounterOverviewTab } from "@/pages/Encounters/tabs/overview";
 import { EncounterPlotsTab } from "@/pages/Encounters/tabs/plots";
 import { EncounterResponsesTab } from "@/pages/Encounters/tabs/responses";
 import { useEncounter } from "@/pages/Encounters/utils/EncounterProvider";
+import {
+  readVaartaReturn,
+  stripVaartaReturn,
+} from "@/pages/Encounters/utils/vaartaHandoff";
 import { PLUGIN_Component } from "@/PluginEngine";
 import {
   ENCOUNTER_STATUS_COLORS,
@@ -104,6 +108,19 @@ export const EncounterShow = (props: Props) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPrimaryEncounterLoading, isPatientLoading]);
+
+  // Vaarta sends the user back here with ?vaarta_session_id=… once the note is ready
+  useEffect(() => {
+    if (readVaartaReturn(window.location.search)) {
+      toast.success(t("vaarta_notes_ready"));
+      window.history.replaceState(
+        null,
+        "",
+        stripVaartaReturn(window.location.href),
+      );
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (
     isPrimaryEncounterLoading ||

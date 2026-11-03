@@ -21,12 +21,20 @@ import {
 import MultiFilter from "@/components/ui/multi-filter/MultiFilter";
 import useMultiFilterState from "@/components/ui/multi-filter/utils/useMultiFilterState";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 
 import { CardListSkeleton } from "@/components/Common/SkeletonLoading";
 
 import RailPanel from "@/components/Common/RailPanel";
 import { useEncounter } from "@/pages/Encounters/utils/EncounterProvider";
+import { buildVaartaUrl } from "@/pages/Encounters/utils/vaartaHandoff";
 import {
   ENCOUNTER_STATUS_COLORS,
   EncounterRead,
@@ -47,7 +55,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import TagBadge from "@/components/Tags/TagBadge";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import encounterApi from "@/types/emr/encounter/encounterApi";
 import query from "@/Utils/request/query";
@@ -204,6 +212,21 @@ function EncounterCard({
   );
 }
 
+const VAARTA_URL = "http://localhost:3000/";
+
+const VAARTA_TEMPLATES = [
+  { id: "clinical_notes_template", label: "Clinical Notes" },
+];
+
+// Languages are shown in their own script so they're recognisable regardless of UI language
+const VAARTA_LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "hi", label: "हिन्दी (Hindi)" },
+  { code: "kn", label: "ಕನ್ನಡ (Kannada)" },
+  { code: "ml", label: "മലയാളം (Malayalam)" },
+  { code: "bn", label: "বাংলা (Bengali)" },
+];
+
 interface Props {
   onSelect?: () => void;
 }
@@ -267,8 +290,31 @@ const EncounterHistoryList = ({ onSelect }: Props) => {
     selectedEncounterId,
     setSelectedEncounter,
     patientId,
+    patient,
     facilityId,
   } = useEncounter();
+
+  const [vaartaLanguage, setVaartaLanguage] = useState("en");
+  const [vaartaTemplate, setVaartaTemplate] = useState(VAARTA_TEMPLATES[0].id);
+
+  const openVaarta = (encounter: EncounterRead) => {
+    const patientName = patient?.name ?? "";
+    const url = buildVaartaUrl(VAARTA_URL, {
+      sessionId: encounter.id,
+      sessionTitle: `${patientName} · ${t(`encounter_class__${encounter.encounter_class}`)}`,
+      attendees: [
+        { name: patientName, role: "patient" },
+        ...encounter.care_team.map((member) => ({
+          name: formatName(member.member),
+          role: member.role.display || "care_team",
+        })),
+      ],
+      language: vaartaLanguage,
+      templateId: vaartaTemplate,
+      callbackUrl: window.location.href,
+    });
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
 
   const handleSelect = (encounterId: string | null) => {
     setSelectedEncounter(encounterId);
@@ -428,6 +474,43 @@ const EncounterHistoryList = ({ onSelect }: Props) => {
               onSelect={() => handleSelect(null)}
               facilityId={facilityId}
             />
+            <Select value={vaartaLanguage} onValueChange={setVaartaLanguage}>
+              <SelectTrigger
+                className="w-full lg:w-80 bg-white"
+                aria-label={t("select_language")}
+              >
+                <SelectValue placeholder={t("select_language")} />
+              </SelectTrigger>
+              <SelectContent>
+                {VAARTA_LANGUAGES.map(({ code, label }) => (
+                  <SelectItem key={code} value={code}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={vaartaTemplate} onValueChange={setVaartaTemplate}>
+              <SelectTrigger
+                className="w-full lg:w-80 bg-white"
+                aria-label={t("select_template")}
+              >
+                <SelectValue placeholder={t("select_template")} />
+              </SelectTrigger>
+              <SelectContent>
+                {VAARTA_TEMPLATES.map(({ id, label }) => (
+                  <SelectItem key={id} value={id}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="primary_gradient"
+              className="text-base font-semibold rounded-md w-full lg:w-80"
+              onClick={() => openVaarta(primaryEncounter)}
+            >
+              {t("take_notes_on_vaarta")}
+            </Button>
           </div>
         </div>
       )}
