@@ -214,8 +214,11 @@ function EncounterCard({
 
 const VAARTA_URL = "http://localhost:3000/";
 
+// Template ids from the Vaarta workspace (GET /voice/api/v1/template); first is the default.
 const VAARTA_TEMPLATES = [
-  { id: "clinical_notes_template", label: "Clinical Notes" },
+  { id: "3b6f6d9e-0d7a-4a3c-9c6f-4a1e2f7c8d01", label: "Clinical Notes" },
+  { id: "7c2e1a54-9b3d-4e8f-a1c2-5d6e7f8a9b02", label: "SOAP Notes" },
+  { id: "e58a4c19-2f7b-4d61-8e3a-9b0c1d2e3f03", label: "Prescription Print" },
 ];
 
 // Languages are shown in their own script so they're recognisable regardless of UI language
