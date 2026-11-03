@@ -1,6 +1,8 @@
 // Builds the CARE → Vaarta handoff link and reads the note Vaarta sends back.
 // Kept free of app imports so it can be unit-tested with `tsx --test`.
 
+export const VAARTA_URL = "http://localhost:3000/";
+
 const RETURN_PARAM = "vaarta_session_id";
 const NOTE_PARAM = "vaarta_note";
 
@@ -45,6 +47,26 @@ export function readVaartaReturn(hash: string): VaartaReturn | null {
   const note = params.get(NOTE_PARAM);
   if (!note?.trim()) return null;
   return { sessionId: params.get(RETURN_PARAM) ?? "", note };
+}
+
+// The Vaarta tab this page opened posts its note here via window.opener.
+// Only messages from Vaarta's origin, for the encounter on screen, count.
+export function readVaartaMessage(
+  origin: string,
+  data: unknown,
+  vaartaOrigin: string,
+  encounterId: string,
+): VaartaReturn | null {
+  if (origin !== vaartaOrigin || typeof data !== "object" || !data) return null;
+  const msg = data as Record<string, unknown>;
+  if (msg.type !== "vaarta:note" || msg.encounterId !== encounterId) {
+    return null;
+  }
+  if (typeof msg.note !== "string" || !msg.note.trim()) return null;
+  return {
+    sessionId: typeof msg.sessionId === "string" ? msg.sessionId : "",
+    note: msg.note,
+  };
 }
 
 export function stripVaartaReturn(href: string): string {

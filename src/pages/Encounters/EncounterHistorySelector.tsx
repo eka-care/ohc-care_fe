@@ -34,7 +34,10 @@ import { CardListSkeleton } from "@/components/Common/SkeletonLoading";
 
 import RailPanel from "@/components/Common/RailPanel";
 import { useEncounter } from "@/pages/Encounters/utils/EncounterProvider";
-import { buildVaartaUrl } from "@/pages/Encounters/utils/vaartaHandoff";
+import {
+  VAARTA_URL,
+  buildVaartaUrl,
+} from "@/pages/Encounters/utils/vaartaHandoff";
 import {
   ENCOUNTER_STATUS_COLORS,
   EncounterRead,
@@ -212,8 +215,6 @@ function EncounterCard({
   );
 }
 
-const VAARTA_URL = "http://localhost:3000/";
-
 // Template ids from the Vaarta workspace (GET /voice/api/v1/template); first is the default.
 const VAARTA_TEMPLATES = [
   { id: "3b6f6d9e-0d7a-4a3c-9c6f-4a1e2f7c8d01", label: "Clinical Notes" },
@@ -316,7 +317,8 @@ const EncounterHistoryList = ({ onSelect }: Props) => {
       templateId: vaartaTemplate,
       callbackUrl: window.location.href,
     });
-    window.open(url, "_blank", "noopener,noreferrer");
+    // No noopener: Vaarta posts the finished note back to this tab via window.opener.
+    window.open(url, "_blank");
   };
 
   const handleSelect = (encounterId: string | null) => {

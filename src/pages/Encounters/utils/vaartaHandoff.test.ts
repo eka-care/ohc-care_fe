@@ -4,9 +4,59 @@ import { describe, it } from "node:test";
 import {
   VaartaHandoffParams,
   buildVaartaUrl,
+  readVaartaMessage,
   readVaartaReturn,
   stripVaartaReturn,
 } from "./vaartaHandoff";
+
+const VAARTA = "http://localhost:3000";
+const noteMessage = (overrides: Record<string, unknown> = {}) => ({
+  type: "vaarta:note",
+  sessionId: "sc-1",
+  encounterId: "e1",
+  note: "# Note",
+  ...overrides,
+});
+
+describe("readVaartaMessage", () => {
+  it("accepts a note from Vaarta for this encounter", () => {
+    assert.deepEqual(readVaartaMessage(VAARTA, noteMessage(), VAARTA, "e1"), {
+      sessionId: "sc-1",
+      note: "# Note",
+    });
+  });
+
+  it("rejects messages from any other origin", () => {
+    assert.equal(
+      readVaartaMessage("https://evil.example", noteMessage(), VAARTA, "e1"),
+      null,
+    );
+  });
+
+  it("rejects a note meant for a different encounter", () => {
+    assert.equal(
+      readVaartaMessage(
+        VAARTA,
+        noteMessage({ encounterId: "e2" }),
+        VAARTA,
+        "e1",
+      ),
+      null,
+    );
+  });
+
+  it("rejects other message types and blank notes", () => {
+    assert.equal(
+      readVaartaMessage(VAARTA, noteMessage({ type: "x" }), VAARTA, "e1"),
+      null,
+    );
+    assert.equal(
+      readVaartaMessage(VAARTA, noteMessage({ note: "  " }), VAARTA, "e1"),
+      null,
+    );
+    assert.equal(readVaartaMessage(VAARTA, "hello", VAARTA, "e1"), null);
+  });
+});
 
 const params: VaartaHandoffParams = {
   sessionId: "enc-123",

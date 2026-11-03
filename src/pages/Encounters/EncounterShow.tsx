@@ -32,6 +32,8 @@ import { EncounterResponsesTab } from "@/pages/Encounters/tabs/responses";
 import { useEncounter } from "@/pages/Encounters/utils/EncounterProvider";
 import { saveVaartaNote } from "@/pages/Encounters/utils/saveVaartaNote";
 import {
+  VAARTA_URL,
+  readVaartaMessage,
   readVaartaReturn,
   stripVaartaReturn,
 } from "@/pages/Encounters/utils/vaartaHandoff";
@@ -130,6 +132,39 @@ export const EncounterShow = (props: Props) => {
       .catch(() => toast.error(t("vaarta_note_save_failed")));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // The Vaarta tab opened from this encounter posts its note here; save it and
+  // confirm so Vaarta can close its tab (no confirmation → it returns here itself).
+  useEffect(() => {
+    const vaartaOrigin = new URL(VAARTA_URL).origin;
+    const onMessage = (event: MessageEvent) => {
+      const vaarta = readVaartaMessage(
+        event.origin,
+        event.data,
+        vaartaOrigin,
+        primaryEncounterId,
+      );
+      if (!vaarta) return;
+      const reply = (ok: boolean) =>
+        (event.source as Window | null)?.postMessage(
+          { type: "vaarta:note-saved", sessionId: vaarta.sessionId, ok },
+          event.origin,
+        );
+      saveVaartaNote(patientId, primaryEncounterId, vaarta.note)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ["threads"] });
+          toast.success(t("vaarta_note_saved"));
+          window.focus();
+          reply(true);
+        })
+        .catch(() => {
+          toast.error(t("vaarta_note_save_failed"));
+          reply(false);
+        });
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [patientId, primaryEncounterId, queryClient, t]);
 
   if (
     isPrimaryEncounterLoading ||
