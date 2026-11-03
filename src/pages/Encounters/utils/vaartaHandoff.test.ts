@@ -43,28 +43,38 @@ describe("buildVaartaUrl", () => {
   });
 });
 
+const returnHash = (sessionId: string, note: string) =>
+  "#" +
+  new URLSearchParams({ vaarta_session_id: sessionId, vaarta_note: note });
+
 describe("readVaartaReturn", () => {
-  it("returns the vaarta_session_id when present", () => {
-    assert.equal(readVaartaReturn("?vaarta_session_id=sc-abc&x=1"), "sc-abc");
+  it("reads the session id and note from the fragment", () => {
+    assert.deepEqual(readVaartaReturn(returnHash("sc-abc", "# Note")), {
+      sessionId: "sc-abc",
+      note: "# Note",
+    });
   });
 
-  it("returns null when absent", () => {
-    assert.equal(readVaartaReturn("?x=1"), null);
+  it("round-trips markdown with reserved and non-Latin characters", () => {
+    const note = "**Dx:** फ्लू & cough #2 — 50% better?\n- BP 120/80";
+    assert.equal(readVaartaReturn(returnHash("sc-1", note))?.note, note);
+  });
+
+  it("returns null without a note", () => {
+    assert.equal(readVaartaReturn("#vaarta_session_id=sc-abc"), null);
+    assert.equal(readVaartaReturn(""), null);
+  });
+
+  it("returns null for a blank note", () => {
+    assert.equal(readVaartaReturn(returnHash("sc-abc", "   ")), null);
   });
 });
 
 describe("stripVaartaReturn", () => {
-  it("removes only vaarta_session_id", () => {
+  it("removes the fragment and keeps the query", () => {
     assert.equal(
-      stripVaartaReturn("http://h/p?vaarta_session_id=sc-abc&x=1"),
+      stripVaartaReturn("http://h/p?x=1" + returnHash("sc-abc", "note")),
       "http://h/p?x=1",
-    );
-  });
-
-  it("drops the ? when nothing else remains", () => {
-    assert.equal(
-      stripVaartaReturn("http://h/p?vaarta_session_id=sc-abc"),
-      "http://h/p",
     );
   });
 });
