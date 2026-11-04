@@ -67,13 +67,18 @@ export function useVaartaReturn({ facilityId, patientId, encounterId }: Args) {
       const care = notes.map((n) =>
         convertFHIRToCare(n.bundle, { encounter: encounterId }),
       );
-      const values = toRxPadValues(care, encounterId, authUser);
+      const { values, matched, unmatched } = await toRxPadValues(
+        care,
+        encounterId,
+        authUser,
+      );
       if (!values.length) return 0;
-      const uncoded = care.flatMap((c) =>
-        c.review.filter((r) => r.type === "medication_request"),
-      ).length;
-      if (uncoded)
-        toast.warning(t("vaarta_note_needs_review", { count: uncoded }));
+      if (matched) {
+        toast.warning(t("vaarta_medicines_matched", { count: matched }));
+      }
+      if (unmatched) {
+        toast.warning(t("vaarta_medicines_unmatched", { count: unmatched }));
+      }
       setPrefill({ encounterId, values });
       navigate(
         `/facility/${facilityId}/patient/${patientId}/encounter/${encounterId}/questionnaire/${RX_PAD_SLUG}`,
