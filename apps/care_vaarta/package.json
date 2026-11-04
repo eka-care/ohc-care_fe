@@ -2,7 +2,7 @@
   "name": "care_vaarta",
   "version": "0.1.0",
   "private": true,
-  "description": "CARE app that hands an encounter to a MedScribe Alliance scribe and fills CARE's Rx pad from the FHIR it returns",
+  "description": "CARE app that hands an encounter to a MedScribe Alliance scribe and files the FHIR note it returns through care_scribe",
   "type": "module",
   "scripts": {
     "build": "vite build",

@@ -3,7 +3,8 @@ import { describe, it } from "node:test";
 
 import {
   buildHandoffUrl,
-  readDocUrls,
+  hasReturnParams,
+  readReturn,
   stripReturnParams,
 } from "../src/handoff.ts";
 
@@ -35,20 +36,43 @@ describe("buildHandoffUrl", () => {
   });
 });
 
-describe("readDocUrls", () => {
-  const search = (...urls: string[]) =>
-    "?" + new URLSearchParams(urls.map((u) => ["doc_url", u])).toString();
+describe("readReturn", () => {
+  const search = (urls: string[], sessionId?: string) =>
+    "?" +
+    new URLSearchParams([
+      ...urls.map((u) => ["doc_url", u]),
+      ...(sessionId ? [["session_id", sessionId]] : []),
+    ]).toString();
 
-  it("keeps doc_urls on the scribe's origin", () => {
+  it("keeps only doc_urls on the scribe's origin", () => {
     const a = `${SCRIBE}/voice/v1/blob/b/a.fhir.jwe`;
-    assert.deepEqual(readDocUrls(search(a), SCRIBE), [a]);
+    assert.deepEqual(
+      readReturn(search([a, "https://evil.example/x", "nope"]), SCRIBE).docUrls,
+      [a],
+    );
   });
 
-  it("drops urls on other origins and values that aren't urls", () => {
-    assert.deepEqual(
-      readDocUrls(search("https://evil.example/x", "nope"), SCRIBE),
-      [],
+  it("reads session_id", () => {
+    assert.equal(readReturn(search([], "s-1"), SCRIBE).sessionId, "s-1");
+  });
+
+  it("returns an empty session id when none is sent", () => {
+    assert.equal(readReturn(search([]), SCRIBE).sessionId, "");
+  });
+});
+
+describe("hasReturnParams", () => {
+  it("is true when the scribe sent anything back, even a foreign doc_url", () => {
+    assert.equal(
+      hasReturnParams("?doc_url=https%3A%2F%2Fevil.example%2Fx"),
+      true,
     );
+    assert.equal(hasReturnParams("?session_id=s-1"), true);
+  });
+
+  it("is false for a plain reload of the return page", () => {
+    assert.equal(hasReturnParams("?tab=1"), false);
+    assert.equal(hasReturnParams(""), false);
   });
 });
 
