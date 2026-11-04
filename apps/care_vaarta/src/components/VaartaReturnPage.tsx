@@ -5,7 +5,12 @@ import { CareApiError } from "@/api";
 import { config } from "@/config";
 import { KeyMissingError } from "@/crypto";
 import { fileScribeNotes } from "@/fileNotes";
-import { ScribeReturn, readReturn, stripReturnParams } from "@/handoff";
+import {
+  ScribeReturn,
+  hasReturnParams,
+  readReturn,
+  stripReturnParams,
+} from "@/handoff";
 import {
   clearPendingReturn,
   loadPendingReturn,
@@ -63,21 +68,20 @@ export function VaartaReturnPage({
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    const fromUrl = readReturn(
-      window.location.search,
-      new URL(config.vaartaUrl).origin,
-    );
-    if (fromUrl.docUrls.length) {
-      savePendingReturn(sessionStorage, encounterId, fromUrl);
-    }
+    const search = window.location.search;
     window.history.replaceState(
       null,
       "",
       stripReturnParams(window.location.href),
     );
-    const toFile = fromUrl.docUrls.length
-      ? fromUrl
-      : loadPendingReturn(sessionStorage, encounterId);
+    // Only a plain reload falls back to what was stored; a fresh callback is judged on its own params.
+    let toFile = loadPendingReturn(sessionStorage, encounterId);
+    if (hasReturnParams(search)) {
+      const fromUrl = readReturn(search, new URL(config.vaartaUrl).origin);
+      toFile = fromUrl.docUrls.length ? fromUrl : undefined;
+      if (toFile) savePendingReturn(sessionStorage, encounterId, toFile);
+      else clearPendingReturn(sessionStorage, encounterId);
+    }
     if (!toFile) {
       setError(strings.noDocUrl);
       return;

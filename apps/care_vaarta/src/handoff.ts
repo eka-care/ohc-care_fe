@@ -46,6 +46,12 @@ export function readReturn(search: string, scribeOrigin: string): ScribeReturn {
   return { docUrls, sessionId: params.get(SESSION_ID_PARAM) ?? "" };
 }
 
+// A reload of the return page carries none of these; a fresh callback carries at least one.
+export function hasReturnParams(search: string): boolean {
+  const params = new URLSearchParams(search);
+  return RETURN_PARAMS.some((param) => params.has(param));
+}
+
 export function stripReturnParams(href: string): string {
   const url = new URL(href);
   RETURN_PARAMS.forEach((param) => url.searchParams.delete(param));

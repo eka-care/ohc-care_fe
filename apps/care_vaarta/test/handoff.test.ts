@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
   buildHandoffUrl,
+  hasReturnParams,
   readReturn,
   stripReturnParams,
 } from "../src/handoff.ts";
@@ -57,6 +58,21 @@ describe("readReturn", () => {
 
   it("returns an empty session id when none is sent", () => {
     assert.equal(readReturn(search([]), SCRIBE).sessionId, "");
+  });
+});
+
+describe("hasReturnParams", () => {
+  it("is true when the scribe sent anything back, even a foreign doc_url", () => {
+    assert.equal(
+      hasReturnParams("?doc_url=https%3A%2F%2Fevil.example%2Fx"),
+      true,
+    );
+    assert.equal(hasReturnParams("?session_id=s-1"), true);
+  });
+
+  it("is false for a plain reload of the return page", () => {
+    assert.equal(hasReturnParams("?tab=1"), false);
+    assert.equal(hasReturnParams(""), false);
   });
 });
 
