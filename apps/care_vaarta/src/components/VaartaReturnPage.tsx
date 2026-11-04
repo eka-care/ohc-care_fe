@@ -1,19 +1,17 @@
 import { navigate } from "raviger";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { MedicinePick } from "@/components/MedicinePick";
+import { CareApiError } from "@/api";
 import { config } from "@/config";
 import { KeyMissingError } from "@/crypto";
-import { readDocUrls, stripReturnParams } from "@/handoff";
+import { fileScribeNotes } from "@/fileNotes";
+import { ScribeReturn, readReturn, stripReturnParams } from "@/handoff";
 import {
-  NoMedicinesError,
-  RxQuestionnaireMissingError,
-  ScribeRx,
-  loadScribeRx,
-  saveRxDraft,
-} from "@/openRxDraft";
+  clearPendingReturn,
+  loadPendingReturn,
+  savePendingReturn,
+} from "@/pendingReturn";
 import { strings } from "@/strings";
-import { Code } from "@/types";
 
 interface Props {
   facilityId: string;
@@ -21,91 +19,80 @@ interface Props {
   encounterId: string;
 }
 
-// undefined: still to choose; null: left out.
-type Pick = Code | null | undefined;
+const STATUS_MESSAGES: Record<number, string> = {
+  400: strings.noteRejected,
+  403: strings.noPermission,
+  409: strings.filedElsewhere,
+};
 
 function messageFor(err: unknown) {
   if (err instanceof KeyMissingError) return strings.keyMissing;
-  if (err instanceof NoMedicinesError) return strings.noMedicines;
-  if (err instanceof RxQuestionnaireMissingError) {
-    return strings.questionnaireMissing(config.rxQuestionnaireSlug);
+  if (err instanceof CareApiError) {
+    return STATUS_MESSAGES[err.status] ?? strings.filingFailed;
   }
-  return strings.loadFailed;
+  return strings.filingFailed;
 }
 
-// The scribe's Publish opens this page with a doc_url per note; the doctor codes its medicines here,
-// then CARE's own Rx pad opens on a draft holding them.
+// The scribe's Publish opens this page with a doc_url per note; each is filed on the encounter and the doctor goes back.
 export function VaartaReturnPage({
   facilityId,
   patientId,
   encounterId,
 }: Props) {
   const encounterPath = `/facility/${facilityId}/patient/${patientId}/encounter/${encounterId}`;
-  const [rx, setRx] = useState<ScribeRx>();
-  const [picks, setPicks] = useState<Pick[]>([]);
+  const [ret, setRet] = useState<ScribeReturn>();
   const [error, setError] = useState("");
-  const [saving, setSaving] = useState(false);
   const started = useRef(false);
 
-  // The doc_urls are read once: they are stripped from the address bar straight away.
+  const file = useCallback(
+    async (toFile: ScribeReturn) => {
+      setError("");
+      try {
+        await fileScribeNotes(toFile, encounterId);
+        clearPendingReturn(sessionStorage, encounterId);
+        navigate(`${encounterPath}/updates`, { replace: true });
+      } catch (err) {
+        console.error("file scribe notes", err);
+        setError(messageFor(err));
+      }
+    },
+    [encounterId, encounterPath],
+  );
+
+  // The params are stripped from the address bar straight away; a reload reads them back from sessionStorage.
   useEffect(() => {
     if (started.current) return;
     started.current = true;
-    const docUrls = readDocUrls(
+    const fromUrl = readReturn(
       window.location.search,
       new URL(config.vaartaUrl).origin,
     );
+    if (fromUrl.docUrls.length) {
+      savePendingReturn(sessionStorage, encounterId, fromUrl);
+    }
     window.history.replaceState(
       null,
       "",
       stripReturnParams(window.location.href),
     );
-    if (!docUrls.length) {
+    const toFile = fromUrl.docUrls.length
+      ? fromUrl
+      : loadPendingReturn(sessionStorage, encounterId);
+    if (!toFile) {
       setError(strings.noDocUrl);
       return;
     }
-    loadScribeRx(docUrls, encounterId)
-      .then((loaded) => {
-        setRx(loaded);
-        setPicks(
-          loaded.meds.map((m) =>
-            m.medication.code ? m.medication : undefined,
-          ),
-        );
-      })
-      .catch((err) => {
-        console.error("load scribe note", err);
-        setError(messageFor(err));
-      });
-  }, [encounterId]);
+    setRet(toFile);
+    file(toFile);
+  }, [encounterId, file]);
 
-  const save = async () => {
-    if (!rx) return;
-    setSaving(true);
-    setError("");
-    try {
-      const draftId = await saveRxDraft(rx, picks as (Code | null)[], {
-        patientId,
-        encounterId,
-      });
-      navigate(
-        `${encounterPath}/questionnaire/${rx.questionnaire.slug}?continue_draft=${draftId}`,
-        { replace: true },
-      );
-    } catch (err) {
-      console.error("save scribe rx draft", err);
-      setError(strings.saveFailed);
-      setSaving(false);
-    }
-  };
-
-  if (!rx) {
-    return (
-      <div className="mx-auto mt-16 max-w-md space-y-4 text-center text-sm">
-        <p className={error ? "text-red-600" : "text-gray-600"}>
-          {error || strings.loading}
-        </p>
-        {error && (
+  return (
+    <div className="mx-auto mt-16 max-w-md space-y-4 text-center text-sm">
+      <p className={error ? "text-red-600" : "text-gray-600"}>
+        {error || strings.filing}
+      </p>
+      {error && (
+        <div className="flex justify-center gap-2">
           <button
             type="button"
             className="rounded-md border border-gray-300 px-3 py-1.5"
@@ -113,49 +100,17 @@ export function VaartaReturnPage({
           >
             {strings.backToEncounter}
           </button>
-        )}
-      </div>
-    );
-  }
-
-  const ready = picks.every((p) => p !== undefined) && picks.some(Boolean);
-  return (
-    <div className="mx-auto mt-8 max-w-2xl space-y-4 px-4">
-      <div>
-        <h1 className="text-lg font-semibold">{strings.reviewTitle}</h1>
-        <p className="text-sm text-gray-600">{strings.reviewHint}</p>
-      </div>
-      <ul className="space-y-2">
-        {rx.meds.map((med, i) => (
-          <MedicinePick
-            key={i}
-            scribeName={med.medication.display}
-            todo={rx.todo[i]}
-            pick={picks[i]}
-            onPick={(pick) =>
-              setPicks((prev) => prev.map((p, j) => (j === i ? pick : p)))
-            }
-          />
-        ))}
-      </ul>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex justify-end gap-2">
-        <button
-          type="button"
-          className="rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-          onClick={() => navigate(`${encounterPath}/updates`)}
-        >
-          {strings.cancel}
-        </button>
-        <button
-          type="button"
-          disabled={!ready || saving}
-          className="rounded-md bg-primary-700 px-3 py-1.5 text-sm text-white disabled:opacity-50"
-          onClick={save}
-        >
-          {saving ? strings.saving : strings.continueToRxPad}
-        </button>
-      </div>
+          {ret && (
+            <button
+              type="button"
+              className="rounded-md bg-primary-700 px-3 py-1.5 text-white"
+              onClick={() => file(ret)}
+            >
+              {strings.retry}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
