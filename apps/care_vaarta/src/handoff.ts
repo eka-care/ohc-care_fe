@@ -1,6 +1,7 @@
-// Builds the redirect to the scribe and reads the doc_urls it appends on publish.
+// Builds the redirect to the scribe and reads what it appends on publish.
 const DOC_URL_PARAM = "doc_url";
-const RETURN_PARAMS = [DOC_URL_PARAM, "document_id", "session_id"];
+const SESSION_ID_PARAM = "session_id";
+const RETURN_PARAMS = [DOC_URL_PARAM, "document_id", SESSION_ID_PARAM];
 
 export interface HandoffParams {
   encounterId: string;
@@ -27,15 +28,22 @@ export function buildHandoffUrl(baseUrl: string, p: HandoffParams): string {
   return url.toString();
 }
 
+export interface ScribeReturn {
+  docUrls: string[];
+  sessionId: string;
+}
+
 // Only urls on the scribe's own origin are fetched, never arbitrary ones from the query string.
-export function readDocUrls(search: string, scribeOrigin: string): string[] {
-  return new URLSearchParams(search).getAll(DOC_URL_PARAM).filter((raw) => {
+export function readReturn(search: string, scribeOrigin: string): ScribeReturn {
+  const params = new URLSearchParams(search);
+  const docUrls = params.getAll(DOC_URL_PARAM).filter((raw) => {
     try {
       return new URL(raw).origin === scribeOrigin;
     } catch {
       return false;
     }
   });
+  return { docUrls, sessionId: params.get(SESSION_ID_PARAM) ?? "" };
 }
 
 export function stripReturnParams(href: string): string {
