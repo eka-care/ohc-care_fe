@@ -58,6 +58,10 @@ const config = [
       "**/*.css",
       "**/*.csv",
       "**/Dockerfile",
+      // Auto-generated AI-tool hook/plugin configs, not part of the app's tsconfig
+      ".opencode/**",
+      ".codex/**",
+      ".cursor/**",
     ],
   },
   eslint.configs.recommended,
@@ -156,11 +160,18 @@ const config = [
       "react/prop-types": "off",
       "react/no-children-prop": "off",
       "react/no-unescaped-entities": "off",
+      // React Compiler rules added to react-hooks v7 `recommended`. Surfaced as
+      // warnings so the existing code is not blocked; address incrementally.
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/static-components": "warn",
+      "react-hooks/immutability": "warn",
+      "react-hooks/purity": "warn",
     },
   },
   // No Relative import paths rule
   {
-    files: ["**/*.{js,jsx,ts,tsx}"],
+    files: ["src/**/*.{js,jsx,ts,tsx}"],
     plugins: {
       "no-relative-import-paths": noRelativeImportPaths,
     },
@@ -169,6 +180,7 @@ const config = [
         "error",
         {
           allowSameFolder: true,
+          rootDir: "src",
           prefix: "@",
         },
       ],

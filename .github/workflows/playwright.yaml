@@ -11,18 +11,27 @@ on:
   push:
     branches: [main, develop, production, playwright-actions]
   pull_request:
-    branches: [develop, production]
+    branches: [develop, production, "3.1/**"]
   workflow_dispatch:
+    inputs:
+      backend_ref:
+        description: "CARE backend branch, tag, or commit (overrides the companion default)"
+        required: false
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: "22"
+  NODE_VERSION: "24"
   REACT_CARE_API_URL: http://localhost:9000
+  REACT_ENABLE_QUESTIONNAIRE_DRAFT: "true"
   BACKEND_STARTUP_TIMEOUT: 120
   TEST_SHARDS: 3
+  # Questionnaire actions require this companion backend. Restore develop
+  # once that dependency lands, independently of the frontend branch name.
+  CARE_BACKEND_REF: ENG-737-backup
 
 jobs:
   # Detect if test-related files changed
@@ -30,12 +39,13 @@ jobs:
     if: github.repository == 'ohcnetwork/care_fe'
     runs-on: ubuntu-latest
     outputs:
-      tests: ${{ steps.filter.outputs.tests }}
+      tests: ${{ github.event_name == 'workflow_dispatch' || steps.filter.outputs.tests == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
       - uses: dorny/paths-filter@v3
         id: filter
+        if: github.event_name != 'workflow_dispatch'
         with:
           filters: |
             tests:
@@ -48,7 +58,7 @@ jobs:
 
   # Build application once and cache for all test shards
   build:
-    if: always() && github.repository == 'ohcnetwork/care_fe' && needs.changes.outputs.tests == 'true'
+    if: "!cancelled() && github.repository == 'ohcnetwork/care_fe' && needs.changes.outputs.tests == 'true'"
     needs: changes
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -57,7 +67,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
@@ -70,8 +80,8 @@ jobs:
         env:
           NODE_ENV: production
 
-      - name: Cache build
-        uses: actions/cache@v4
+      - name: Save build and node_modules to cache
+        uses: actions/cache/save@v4
         with:
           path: |
             build/
@@ -80,7 +90,7 @@ jobs:
 
   # Run E2E tests with backend integration
   test:
-    if: always() && github.repository == 'ohcnetwork/care_fe' && needs.changes.outputs.tests == 'true'
+    if: "!cancelled() && github.repository == 'ohcnetwork/care_fe' && needs.changes.outputs.tests == 'true'"
     needs: [changes, build]
     timeout-minutes: 30
     runs-on: ubuntu-latest
@@ -93,25 +103,23 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set backend branch
-        id: backend-branch
-        run: echo "branch=develop" >> "$GITHUB_OUTPUT"
-
       - name: Checkout care
         uses: actions/checkout@v4
         with:
           repository: ohcnetwork/care
           path: care
-          ref: ${{ steps.backend-branch.outputs.branch }}
+          ref: ${{ inputs.backend_ref || env.CARE_BACKEND_REF }}
+
+      - name: Resolve backend revision
+        id: backend-revision
+        run: echo "sha=$(git -C care rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Cache Docker images
         id: docker-cache
         uses: actions/cache@v4
         with:
           path: /tmp/docker-cache
-          key: ${{ runner.os }}-docker-care-${{ hashFiles('care/docker/dev.Dockerfile', 'care/Pipfile.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-docker-care-
+          key: ${{ runner.os }}-docker-care-${{ steps.backend-revision.outputs.sha }}
 
       - name: Load cached Docker images
         run: |
@@ -127,6 +135,10 @@ jobs:
           echo DISABLE_RATELIMIT=True >> docker/.local.env
           echo JWKS_BASE64=\"$(cat ../.github/runner-files/jwks.b64.txt)\" >> docker/.local.env
           echo MAX_QUESTIONNAIRE_TEXT_RESPONSE_SIZE=500 >> docker/.local.env
+          # Shards reuse the setup logins for longer than the default
+          # 10-minute access token, so keep tokens valid for the whole job.
+          echo JWT_ACCESS_TOKEN_LIFETIME=60 >> docker/.local.env
+          echo JWT_REFRESH_TOKEN_LIFETIME=120 >> docker/.local.env
           make docker_config_file=docker-compose.local.yaml up load-fixtures
           cd ..
         env:
@@ -145,7 +157,7 @@ jobs:
           done
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "npm"
@@ -158,15 +170,30 @@ jobs:
             build/
             node_modules/
           key: build-${{ github.sha }}
-          fail-on-cache-miss: true
+
+      - name: Retry cache restore after delay
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        id: cache-retry
+        run: |
+          echo "Cache miss on first attempt, waiting 30s for propagation..."
+          sleep 30
+
+      - name: Restore build cache (retry)
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        id: cache-restore-retry
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            build/
+            node_modules/
+          key: build-${{ github.sha }}
 
       - name: Verify build exists
         run: |
-          if [ ! -d "build" ]; then
-            echo "::error::Build directory not found. Cache restoration may have failed."
+          if [ ! -f build/index.html ]; then
+            echo "::error::Build not found after cache restore attempts (key: build-${{ github.sha }})"
             exit 1
           fi
-          echo "Build directory verified"
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -217,7 +244,7 @@ jobs:
 
   # Aggregate results and create final report
   report:
-    if: always() && github.repository == 'ohcnetwork/care_fe'
+    if: "!cancelled() && github.repository == 'ohcnetwork/care_fe'"
     needs: [changes, test]
     runs-on: ubuntu-latest
     steps:

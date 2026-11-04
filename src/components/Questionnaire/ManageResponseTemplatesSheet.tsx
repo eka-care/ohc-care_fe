@@ -1,3 +1,4 @@
+import { Spinner } from "@/components/ui/spinner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,7 +8,6 @@ import {
   ChevronLeft,
   ClipboardListIcon,
   Edit,
-  Loader2Icon,
   PillIcon,
   PlusIcon,
   SaveIcon,
@@ -23,6 +23,7 @@ import * as z from "zod";
 
 import { cn } from "@/lib/utils";
 
+import { FormattedDosage } from "@/components/Medicine/FormattedDosage";
 import {
   formatDosage,
   formatDuration,
@@ -205,12 +206,14 @@ function MedicationsPreview({
 
           const instructions = med.dosage_instruction ?? [];
           const dosageLines = instructions
-            .map((di) =>
-              [formatDosage(di), formatFrequency(di), formatDuration(di)]
+            .map((di) => ({
+              di,
+              dosage: formatDosage(di),
+              instructionText: [formatFrequency(di), formatDuration(di)]
                 .filter(Boolean)
                 .join(" • "),
-            )
-            .filter(Boolean);
+            }))
+            .filter((line) => line.dosage || line.instructionText);
 
           return (
             <Button
@@ -237,7 +240,13 @@ function MedicationsPreview({
                 {dosageLines.length > 0 && (
                   <div className="text-xs text-gray-500 mt-0.5 leading-tight">
                     {dosageLines.map((line, i) => (
-                      <div key={i}>{line}</div>
+                      <div key={i}>
+                        {line.dosage && (
+                          <FormattedDosage instruction={line.di} fallback="" />
+                        )}
+                        {line.dosage && line.instructionText && " • "}
+                        {line.instructionText}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -483,7 +492,7 @@ function TemplateCard({
             onClick={(e) => e.stopPropagation()}
           >
             {isApplying && (
-              <Loader2Icon className="size-4 animate-spin text-primary-600" />
+              <Spinner className="size-4 animate-spin text-primary-600" />
             )}
             {isApplied && (
               <CheckCircle2Icon className="size-4 text-green-600" />
@@ -1057,7 +1066,7 @@ export default function ManageResponseTemplatesSheet({
             >
               {isCreating || isUpdating ? (
                 <>
-                  <Loader2Icon className="size-3.5 mr-1.5 animate-spin" />
+                  <Spinner className="size-3.5 mr-1.5 animate-spin" />
                   <span className="text-xs">
                     {editingTemplate ? t("updating") : t("creating")}
                   </span>

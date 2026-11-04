@@ -3,6 +3,7 @@ import { navigate, useQueryParams } from "raviger";
 import { useTranslation } from "react-i18next";
 
 import CareIcon from "@/CAREUI/icons/CareIcon";
+import { PLUGIN_Component } from "@/PluginEngine";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -82,6 +83,7 @@ export function DeliveryOrderList({
   const { data: response, isLoading } = useQuery({
     queryKey: [
       "deliveryOrders",
+      facilityId,
       locationId,
       internal,
       isRequester,
@@ -134,6 +136,13 @@ export function DeliveryOrderList({
           </div>
           {(!isRequester || !internal) && (
             <div className="flex items-center gap-2">
+              {!internal && (
+                <PLUGIN_Component
+                  __name="DeliveryOrderActions"
+                  facilityId={facilityId}
+                  locationId={locationId}
+                />
+              )}
               <Button
                 variant="primary"
                 onClick={() =>
@@ -158,17 +167,18 @@ export function DeliveryOrderList({
         </div>
 
         <Tabs value={currentTab} onValueChange={handleTabChange}>
-          <TabsList className="w-full justify-evenly sm:justify-start border-b rounded-none bg-transparent p-0 h-auto overflow-x-auto">
-            {TABS_CONFIG.map((tab) => (
-              <TabsTrigger
-                key={tab.value}
-                value={tab.value}
-                className="border-b-3 px-2.5 py-1 font-semibold text-gray-600 hover:text-gray-900 data-[state=active]:border-b-primary-700  data-[state=active]:text-primary-800 data-[state=active]:bg-transparent data-[state=active]:shadow-none rounded-none"
-              >
-                {t(tab.label)}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <div className="w-full overflow-x-auto pb-1">
+            <TabsList
+              variant="line"
+              className="w-full justify-evenly border-b border-border sm:justify-start"
+            >
+              {TABS_CONFIG.map((tab) => (
+                <TabsTrigger key={tab.value} value={tab.value}>
+                  {t(tab.label)}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </div>
 
           {TABS_CONFIG.map((tab) => (
             <TabsContent

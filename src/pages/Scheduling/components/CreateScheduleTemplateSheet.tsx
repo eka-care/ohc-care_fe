@@ -31,7 +31,6 @@ import {
   SheetContent,
   SheetDescription,
   SheetFooter,
-  SheetHeader,
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
@@ -44,16 +43,19 @@ import mutate from "@/Utils/request/mutate";
 import { Time } from "@/Utils/types";
 import { dateQueryString } from "@/Utils/utils";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ScheduleEncounterDefaultsFields } from "@/pages/Scheduling/components/ScheduleEncounterDefaultsFields";
 import {
   calculateSlotDuration,
   getSlotsPerSession,
   getTokenDuration,
 } from "@/pages/Scheduling/utils";
+import { CareTeamResponse, toCareTeamMembers } from "@/types/careTeam/careTeam";
 import {
   SchedulableResourceType,
   ScheduleAvailabilityCreateRequest,
 } from "@/types/scheduling/schedule";
 import scheduleApis from "@/types/scheduling/scheduleApi";
+import { Info } from "lucide-react";
 
 interface Props {
   facilityId: string;
@@ -88,15 +90,17 @@ export default function CreateScheduleTemplateSheet({
     .object({
       name: z.string().trim().min(1, t("field_required")),
       valid_from: z
-        .date({ required_error: t("field_required") })
+        .date({ error: t("field_required") })
         .min(dayjs().startOf("day").toDate(), {
           message: t("schedule_creation_for_past_validation_error"),
         }),
-      valid_to: z.date({ required_error: t("field_required") }),
+      valid_to: z.date({ error: t("field_required") }),
       is_public: z.boolean(),
+      organizations: z.array(z.string()),
+      care_team: z.array(z.custom<CareTeamResponse>()),
 
       weekdays: z
-        .array(z.number() as unknown as z.ZodType<DayOfWeek>)
+        .array(z.number() as unknown as z.ZodType<DayOfWeek, DayOfWeek>)
         .min(1, t("schedule_weekdays_min_error")),
       availabilities: z
         .array(
@@ -108,11 +112,17 @@ export default function CreateScheduleTemplateSheet({
                 name: z.string().trim().min(1, t("field_required")),
                 reason: z.string().trim(),
                 start_time: z
-                  .string({ required_error: t("field_required") })
-                  .min(1, t("field_required")) as z.ZodType<Time | undefined>,
+                  .string({ error: t("field_required") })
+                  .min(1, t("field_required")) as z.ZodType<
+                  Time | undefined,
+                  Time | undefined
+                >,
                 end_time: z
-                  .string({ required_error: t("field_required") })
-                  .min(1, t("field_required")) as z.ZodType<Time | undefined>,
+                  .string({ error: t("field_required") })
+                  .min(1, t("field_required")) as z.ZodType<
+                  Time | undefined,
+                  Time | undefined
+                >,
                 slot_size_in_minutes: z
                   .union([
                     z.number().min(1, t("number_min_error", { min: 1 })),
@@ -145,11 +155,17 @@ export default function CreateScheduleTemplateSheet({
                 name: z.string().trim().min(1, t("field_required")),
                 reason: z.string().trim(),
                 start_time: z
-                  .string({ required_error: t("field_required") })
-                  .min(1, t("field_required")) as unknown as z.ZodType<Time>,
+                  .string({ error: t("field_required") })
+                  .min(1, t("field_required")) as unknown as z.ZodType<
+                  Time,
+                  Time
+                >,
                 end_time: z
-                  .string({ required_error: t("field_required") })
-                  .min(1, t("field_required")) as unknown as z.ZodType<Time>,
+                  .string({ error: t("field_required") })
+                  .min(1, t("field_required")) as unknown as z.ZodType<
+                  Time,
+                  Time
+                >,
                 slot_size_in_minutes: z.literal(null),
                 tokens_per_slot: z.literal(null),
               }),
@@ -185,6 +201,8 @@ export default function CreateScheduleTemplateSheet({
       valid_to: undefined,
       weekdays: [],
       is_public: false,
+      organizations: [],
+      care_team: [],
       availabilities: [
         {
           name: "",
@@ -223,6 +241,8 @@ export default function CreateScheduleTemplateSheet({
       resource_type: resourceType,
       resource_id: resourceId,
       is_public: values.is_public,
+      organizations: values.organizations,
+      care_team: toCareTeamMembers(values.care_team),
       availabilities: values.availabilities.map(
         (availability) =>
           ({
@@ -263,7 +283,15 @@ export default function CreateScheduleTemplateSheet({
     if (!slotsPerSession || !tokenDuration) return null;
 
     return (
-      <Callout variant="alert" badge="Info">
+      <Callout
+        variant="alert"
+        badge={
+          <>
+            <Info className="size-4 shrink-0" />
+            <span className="sr-only">{t("info")}</span>
+          </>
+        }
+      >
         <Trans
           i18nKey="schedule_slots_allocation_callout"
           values={{
@@ -301,15 +329,13 @@ export default function CreateScheduleTemplateSheet({
           </Button>
         )}
       </SheetTrigger>
-      <SheetContent className="flex min-w-full flex-col bg-gray-100 sm:min-w-fit">
-        <SheetHeader>
-          <SheetTitle>{t("create_schedule_template")}</SheetTitle>
-          <SheetDescription className="sr-only">
-            {t("create_schedule_template")}
-          </SheetDescription>
-        </SheetHeader>
+      <SheetContent className="flex min-w-full flex-col bg-background sm:min-w-fit">
+        <SheetTitle>{t("create_schedule_template")}</SheetTitle>
+        <SheetDescription className="sr-only">
+          {t("create_schedule_template")}
+        </SheetDescription>
 
-        <div className="-mx-6 mb-16 overflow-auto px-6 pb-16 pt-6">
+        <div className="-mx-6 flex-1 overflow-auto px-6 pb-32 md:pb-16 pt-6 bg-muted-background">
           <Form {...form}>
             <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
               <FormField
@@ -418,6 +444,18 @@ export default function CreateScheduleTemplateSheet({
                     <FormMessage />
                   </FormItem>
                 )}
+              />
+              <ScheduleEncounterDefaultsFields
+                facilityId={facilityId}
+                organizations={form.watch("organizations")}
+                onOrganizationsChange={(value) =>
+                  form.setValue("organizations", value, { shouldDirty: true })
+                }
+                careTeam={form.watch("care_team")}
+                onCareTeamChange={(value) =>
+                  form.setValue("care_team", value, { shouldDirty: true })
+                }
+                disabled={isPending}
               />
               <div className="space-y-4">
                 {form.watch("availabilities")?.map((_, index) => (
@@ -767,7 +805,7 @@ export default function CreateScheduleTemplateSheet({
                 <span>{t("add_another_session")}</span>
               </Button>
 
-              <SheetFooter className="absolute inset-x-0 bottom-0 border-t border-gray-200 bg-white p-6">
+              <SheetFooter className="absolute inset-x-0 bottom-0 border-t border-gray-200 bg-white px-6 pb-4">
                 <SheetClose asChild>
                   <Button
                     variant="outline"

@@ -35,9 +35,10 @@ import ValueSetSelect from "@/components/Questionnaire/ValueSetSelect";
 
 import mutate from "@/Utils/request/mutate";
 import query from "@/Utils/request/query";
-import { generateSlug } from "@/Utils/utils";
+
 import { Code, CodeSchema } from "@/types/base/code/code";
 import { ResourceCategoryResourceType } from "@/types/base/resourceCategory/resourceCategory";
+import { slugValueSchema } from "@/types/base/slug/schema";
 import { DOSAGE_UNITS_CODES } from "@/types/emr/medicationRequest/medicationRequest";
 import {
   ProductKnowledgeBase,
@@ -49,26 +50,16 @@ import {
   UCUM_TIME_UNITS_CODES,
 } from "@/types/inventory/productKnowledge/productKnowledge";
 import productKnowledgeApi from "@/types/inventory/productKnowledge/productKnowledgeApi";
+import { generateSlugValue } from "@/Utils/slug";
 
 const createFormSchema = (
   t: (key: string, options?: Record<string, unknown>) => string,
 ) => {
   return z.object({
     name: z.string().min(1, { message: t("name_is_required") }),
-    slug_value: z
-      .string()
-      .trim()
-      .min(5, {
-        message: t("character_count_validation", { min: 5, max: 25 }),
-      })
-      .max(25, {
-        message: t("character_count_validation", { min: 5, max: 25 }),
-      })
-      .regex(/^[a-z0-9_-]+$/, {
-        message: t("slug_format_message"),
-      }),
-    product_type: z.nativeEnum(ProductKnowledgeType),
-    status: z.nativeEnum(ProductKnowledgeStatus),
+    slug_value: slugValueSchema(),
+    product_type: z.enum(ProductKnowledgeType),
+    status: z.enum(ProductKnowledgeStatus),
     alternate_identifier: z.string().trim().optional(),
     category: z.string(),
     code: CodeSchema.nullable(),
@@ -78,7 +69,7 @@ const createFormSchema = (
     names: z
       .array(
         z.object({
-          name_type: z.nativeEnum(ProductNameTypes),
+          name_type: z.enum(ProductNameTypes),
           name: z.string().min(1, { message: t("name_is_required") }),
         }),
       )
@@ -365,10 +356,8 @@ function ProductKnowledgeFormContent({
                               if (!isEditMode) {
                                 form.setValue(
                                   "slug_value",
-                                  generateSlug(e.target.value || "", 25),
-                                  {
-                                    shouldValidate: true,
-                                  },
+                                  generateSlugValue(e.target.value),
+                                  { shouldValidate: true },
                                 );
                               }
                             }}
@@ -776,7 +765,7 @@ function ProductKnowledgeFormContent({
                                     {t("duration_unit")}
                                   </FormLabel>
                                   <Select
-                                    value={field.value.code}
+                                    value={field.value?.code}
                                     onValueChange={(value) => {
                                       const selectedUnit =
                                         UCUM_TIME_UNITS_CODES.find(

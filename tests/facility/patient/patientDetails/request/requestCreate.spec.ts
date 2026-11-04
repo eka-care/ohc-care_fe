@@ -27,7 +27,10 @@ test.describe("Resource Request Creation", () => {
 
     await test.step("Navigate to patient details", async () => {
       await page.getByText("View Encounter").first().click();
-      await page.getByRole("button", { name: /.*Y,.*/ }).click();
+      await page
+        .locator("[data-slot='patient-info-hover-card-trigger']")
+        .last()
+        .click();
       const viewProfileLink = page.getByRole("link", { name: "View Profile" });
       await viewProfileLink.waitFor({ state: "visible" });
       await viewProfileLink.click();

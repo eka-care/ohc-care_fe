@@ -33,7 +33,7 @@ import locationApi from "@/types/location/locationApi";
 import LocationMap from "./LocationMap";
 import LocationSheet from "./LocationSheet";
 import LocationView from "./LocationView";
-import { LocationCard } from "./components/LocationCard";
+import { SettingsLocationCard as LocationCard } from "./components/LocationCard";
 import { LocationTable } from "./components/LocationTable";
 
 interface LocationSettingsProps {
@@ -151,7 +151,7 @@ export default function LocationSettings({
               <TabsTrigger
                 value="list"
                 id="location-list-view"
-                className="data-[state=active]:text-primary"
+                className="data-active:text-primary"
               >
                 <CareIcon icon="l-list-ul" className="text-lg" />
                 <span>{t("list")}</span>
@@ -159,7 +159,7 @@ export default function LocationSettings({
               <TabsTrigger
                 value="map"
                 id="location-map-view"
-                className="data-[state=active]:text-primary"
+                className="data-active:text-primary"
               >
                 <CareIcon icon="l-map" className="text-lg" />
                 <span>{t("map")}</span>

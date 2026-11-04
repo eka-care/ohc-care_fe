@@ -1,9 +1,9 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { SaveIcon, Trash2Icon } from "lucide-react";
+import { Info, SaveIcon, Trash2Icon } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { Trans, useTranslation } from "react-i18next";
 import { toast } from "sonner";
 import * as z from "zod";
@@ -41,15 +41,18 @@ import { Textarea } from "@/components/ui/textarea";
 import ConfirmActionDialog from "@/components/Common/ConfirmActionDialog";
 
 import mutate from "@/Utils/request/mutate";
+import query from "@/Utils/request/query";
 import { Time } from "@/Utils/types";
 import { dateQueryString } from "@/Utils/utils";
 import { Checkbox } from "@/components/ui/checkbox";
+import { ScheduleEncounterDefaultsFields } from "@/pages/Scheduling/components/ScheduleEncounterDefaultsFields";
 import {
   calculateSlotDuration,
   formatAvailabilityTime,
   getSlotsPerSession,
   getTokenDuration,
 } from "@/pages/Scheduling/utils";
+import { CareTeamResponse, toCareTeamMembers } from "@/types/careTeam/careTeam";
 import {
   AvailabilityDateTime,
   SchedulableResourceType,
@@ -148,16 +151,33 @@ const ScheduleTemplateEditor = ({
   const queryClient = useQueryClient();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
+  // The list response omits the encounter defaults; only the detail has them.
+  // The key nests under the list's so saving refreshes both.
+  const { data: templateDetail } = useQuery({
+    queryKey: [
+      "schedule",
+      facilityId,
+      { resourceType, resourceId, id: template.id },
+    ],
+    queryFn: query(scheduleApis.templates.retrieve, {
+      pathParams: { facilityId, id: template.id },
+    }),
+  });
+  const savedOrganizations = templateDetail?.organizations ?? [];
+  const savedCareTeam = templateDetail?.care_team ?? [];
+
   const templateFormSchema = z
     .object({
       name: z.string().min(1, t("field_required")),
       valid_from: z.date({
-        required_error: t("field_required"),
+        error: t("field_required"),
       }),
       valid_to: z.date({
-        required_error: t("field_required"),
+        error: t("field_required"),
       }),
       is_public: z.boolean(),
+      organizations: z.array(z.string()),
+      care_team: z.array(z.custom<CareTeamResponse>()),
     })
     .refine(
       (data) => !dayjs(data.valid_to).isBefore(dayjs(data.valid_from), "day"),
@@ -174,7 +194,22 @@ const ScheduleTemplateEditor = ({
       valid_from: new Date(template.valid_from),
       valid_to: new Date(template.valid_to),
       is_public: template.is_public,
+      organizations: [],
+      care_team: [],
     },
+    values: templateDetail && {
+      name: templateDetail.name,
+      valid_from: new Date(templateDetail.valid_from),
+      valid_to: new Date(templateDetail.valid_to),
+      is_public: templateDetail.is_public,
+      organizations: savedOrganizations.map(({ id }) => id),
+      care_team: savedCareTeam,
+    },
+    resetOptions: { keepDirtyValues: true },
+  });
+  const [organizations, careTeam] = useWatch({
+    control: form.control,
+    name: ["organizations", "care_team"],
   });
 
   const { mutate: updateTemplate, isPending: isUpdating } = useMutation({
@@ -204,11 +239,22 @@ const ScheduleTemplateEditor = ({
   const isProcessing = isUpdating || isDeleting;
 
   function onSubmit(values: z.infer<typeof templateFormSchema>) {
+    const careTeamMembers = toCareTeamMembers(values.care_team);
+    // Saved defaults may name departments or staff no longer at the facility,
+    // which the API rejects. Send them only when edited so other changes save.
+    const organizationsChanged =
+      JSON.stringify(values.organizations) !==
+      JSON.stringify(savedOrganizations.map(({ id }) => id));
+    const careTeamChanged =
+      JSON.stringify(careTeamMembers) !==
+      JSON.stringify(toCareTeamMembers(savedCareTeam));
     updateTemplate({
       name: values.name,
       valid_from: dateQueryString(values.valid_from),
       valid_to: dateQueryString(values.valid_to),
       is_public: values.is_public,
+      ...(organizationsChanged && { organizations: values.organizations }),
+      ...(careTeamChanged && { care_team: careTeamMembers }),
     });
   }
 
@@ -284,7 +330,15 @@ const ScheduleTemplateEditor = ({
                   </FormLabel>
                 </div>
                 {template.is_public && !field.value && (
-                  <Callout variant="warning" badge="Note">
+                  <Callout
+                    variant="warning"
+                    badge={
+                      <>
+                        <Info className="size-4 shrink-0" />
+                        <span className="sr-only">{t("note")}</span>
+                      </>
+                    }
+                  >
                     <p className="text-sm">
                       {t("template_visibility_change_warning")}
                     </p>
@@ -293,6 +347,21 @@ const ScheduleTemplateEditor = ({
                 <FormMessage />
               </FormItem>
             )}
+          />
+
+          <ScheduleEncounterDefaultsFields
+            facilityId={facilityId}
+            organizations={organizations}
+            onOrganizationsChange={(value) =>
+              form.setValue("organizations", value, { shouldDirty: true })
+            }
+            currentOrganizations={savedOrganizations}
+            careTeam={careTeam}
+            onCareTeamChange={(value) =>
+              form.setValue("care_team", value, { shouldDirty: true })
+            }
+            // Until the saved defaults load, an edit here would replace them.
+            disabled={isProcessing || !templateDetail}
           />
 
           <div className="flex justify-end gap-2">
@@ -556,16 +625,18 @@ const NewAvailabilityCard = ({
       name: z.string().min(1, t("field_required")),
       slot_type: z.enum(["appointment", "open", "closed"]),
       start_time: z.string().min(1, t("field_required")) as z.ZodType<
+        Time | undefined,
         Time | undefined
       >,
       end_time: z.string().min(1, t("field_required")) as z.ZodType<
+        Time | undefined,
         Time | undefined
       >,
       slot_size_in_minutes: z.number().nullable(),
       tokens_per_slot: z.number().nullable(),
       reason: z.string().trim(),
       weekdays: z
-        .array(z.number() as unknown as z.ZodType<DayOfWeek>)
+        .array(z.number() as unknown as z.ZodType<DayOfWeek, DayOfWeek>)
         .min(1, t("schedule_weekdays_min_error")),
       is_auto_fill: z.boolean().optional(),
       num_of_slots: z.number().min(1, t("number_min_error", { min: 0 })),
@@ -634,7 +705,15 @@ const NewAvailabilityCard = ({
     if (!slotsPerSession || !tokenDuration) return null;
 
     return (
-      <Callout variant="alert" badge="Info">
+      <Callout
+        variant="alert"
+        badge={
+          <>
+            <Info className="size-4 shrink-0" />
+            <span className="sr-only">{t("info")}</span>
+          </>
+        }
+      >
         <Trans
           i18nKey="schedule_slots_allocation_callout"
           values={{

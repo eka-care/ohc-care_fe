@@ -21,6 +21,7 @@ import { CardListWithHeaderSkeleton } from "@/components/Common/SkeletonLoading"
 
 import query from "@/Utils/request/query";
 import BackButton from "@/components/Common/BackButton";
+import { MonetaryDisplay } from "@/components/ui/monetary-display";
 import { PRODUCT_STATUS_COLORS } from "@/types/inventory/product/product";
 import productApi from "@/types/inventory/product/productApi";
 import { PRODUCT_KNOWLEDGE_TYPE_COLORS } from "@/types/inventory/productKnowledge/productKnowledge";
@@ -83,10 +84,10 @@ export default function ProductView({ facilityId, productId }: Props) {
           {t("back_to_list")}
         </BackButton>
 
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3">
-              <h1 className="text-2xl font-bold">
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0 flex-[1_1_16rem]">
+            <div className="flex min-w-0 flex-wrap items-center gap-3">
+              <h1 className="min-w-0 break-all text-2xl font-bold">
                 {t("product")}: {product.id}
               </h1>
               <Badge variant={PRODUCT_STATUS_COLORS[product.status]}>
@@ -146,7 +147,10 @@ export default function ProductView({ facilityId, productId }: Props) {
             {product.purchase_price != null && (
               <div>
                 <p className="text-sm text-gray-500">{t("purchase_price")}</p>
-                <p className="text-gray-700">{product.purchase_price}</p>
+                <MonetaryDisplay
+                  className="text-gray-700"
+                  amount={product.purchase_price}
+                />
               </div>
             )}
           </CardContent>
@@ -161,8 +165,8 @@ export default function ProductView({ facilityId, productId }: Props) {
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="rounded-lg border bg-gray-50/50 p-4 transition-colors hover:bg-gray-50">
-              <div className="flex items-start justify-between">
-                <div className="space-y-2">
+              <div className="flex min-w-0 flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0 flex-[1_1_16rem] space-y-2">
                   <div className="flex items-center gap-2">
                     <Badge
                       variant={
@@ -174,10 +178,10 @@ export default function ProductView({ facilityId, productId }: Props) {
                       {t(product.product_knowledge.product_type)}
                     </Badge>
                   </div>
-                  <h3 className="font-medium">
+                  <h3 className="break-words font-medium">
                     {product.product_knowledge.name}
                   </h3>
-                  <p className="text-sm text-gray-500">
+                  <p className="break-all text-sm text-gray-500">
                     {product.product_knowledge.slug}
                   </p>
                 </div>
