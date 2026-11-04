@@ -49,6 +49,8 @@ const config = [
   // Base configuration
   {
     ignores: [
+      // CARE apps lint and type-check on their own; they sit outside CARE's tsconfig.
+      "apps/**",
       "**/dist",
       "**/public",
       "**/lib",
