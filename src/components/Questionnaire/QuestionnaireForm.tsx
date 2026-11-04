@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useAtom } from "jotai";
 import { navigate, useNavigationPrompt, useQueryParams } from "raviger";
 import { useEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
@@ -16,10 +17,11 @@ import { DebugPreview } from "@/components/Common/DebugPreview";
 import Loading from "@/components/Common/Loading";
 
 import { PLUGIN_Component } from "@/PluginEngine";
+import { useBatchRequest } from "@/Utils/request/batch";
 import mutate from "@/Utils/request/mutate";
 import query from "@/Utils/request/query";
+import { HttpMethod, Type } from "@/Utils/request/types";
 import { dateQueryString } from "@/Utils/utils";
-import batchApi from "@/types/base/batch/batchApi";
 import { MedicationRequestCreate } from "@/types/emr/medicationRequest/medicationRequest";
 import { MedicationStatementRequest } from "@/types/emr/medicationStatement";
 import { FileUploadQuestion } from "@/types/files/file";
@@ -57,6 +59,8 @@ import { FIXED_QUESTIONNAIRES } from "./data/StructuredFormData";
 import { getStructuredRequests } from "./structured/handlers";
 
 import queryClient from "@/Utils/request/queryClient";
+
+import { questionnairePrefillAtom } from "@/atoms/questionnairePrefillAtom";
 
 export interface QuestionnaireFormState {
   questionnaire: QuestionnaireRead;
@@ -364,6 +368,16 @@ const initializeResponses = (
   return responses;
 };
 
+// Fills each structured question with the prefilled value of the same type.
+const applyPrefill = (
+  responses: QuestionnaireResponse[],
+  values: ResponseValue[],
+): QuestionnaireResponse[] =>
+  responses.map((response) => {
+    const value = values.find((v) => v.type === response.structured_type);
+    return value ? { ...response, values: [value] } : response;
+  });
+
 export function QuestionnaireForm({
   questionnaireSlug,
   patientId,
@@ -385,6 +399,7 @@ export function QuestionnaireForm({
   const [activeGroupId, setActiveGroupId] = useState<string>();
   const [isInitialized, setIsInitialized] = useState(false);
   const [draftMismatchError, setDraftMismatchError] = useState(false);
+  const [prefill, setPrefill] = useAtom(questionnairePrefillAtom);
 
   const {
     data: questionnaireData,
@@ -413,8 +428,8 @@ export function QuestionnaireForm({
     enabled: !!continueDraftId,
   });
 
-  const { mutate: submitBatch, isPending: isSubmitPending } = useMutation({
-    mutationFn: mutate(batchApi.batchRequest, { silent: true }),
+  const { mutate: submitBatch, isPending: isSubmitPending } = useBatchRequest({
+    silent: true,
     onSuccess: () => {
       setServerErrors(undefined);
       toast.success(t("questionnaire_submitted_successfully"));
@@ -613,14 +628,21 @@ export function QuestionnaireForm({
           setIsInitialized(true);
         }
       } else if (questionnaire) {
-        // No draft, initialize with empty responses
+        const prefillValues =
+          prefill && prefill.encounterId === encounterId
+            ? prefill.values
+            : undefined;
         setQuestionnaireForms([
           {
             questionnaire,
-            responses: initializeResponses(questionnaire.questions),
+            responses: applyPrefill(
+              initializeResponses(questionnaire.questions),
+              prefillValues ?? [],
+            ),
             errors: [],
           },
         ]);
+        if (prefillValues) setPrefill(null);
         setIsInitialized(true);
       }
     }
@@ -631,6 +653,9 @@ export function QuestionnaireForm({
     continueDraftId,
     draftData,
     isDraftFetching,
+    prefill,
+    setPrefill,
+    encounterId,
   ]);
 
   // Show loading while fetching questionnaire or draft
@@ -937,7 +962,17 @@ export function QuestionnaireForm({
     }
 
     setIsDirty(false);
-    submitBatch({ requests });
+    submitBatch(
+      requests.map((request) => ({
+        api: {
+          path: request.url,
+          method: request.method as HttpMethod,
+          TRes: Type<unknown>(),
+        },
+        body: request.body,
+        referenceId: request.reference_id,
+      })),
+    );
   };
 
   const scrollToQuestion = (questionnaireId: string, groupId?: string) => {

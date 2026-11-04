@@ -111,6 +111,7 @@
     "i18next-http-backend": "^3.0.1",
     "i18next-resources-to-backend": "^1.2.1",
     "input-otp": "^1.4.2",
+    "jose": "^6.2.15",
     "jotai": "^2.12.3",
     "jotai-family": "^1.0.1",
     "jspdf": "^3.0.2",

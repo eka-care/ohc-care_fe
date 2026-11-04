@@ -277,6 +277,19 @@ export function validateMedicationRequestQuestion(
     // Skip validation for medications marked as entered_in_error
     if (value.status === "entered_in_error") return errors;
 
+    if (!value.requested_product && !value.medication?.code) {
+      return [
+        ...errors,
+        {
+          question_id: questionId,
+          error: t("medication_choose_from_search"),
+          type: "validation_error",
+          field_key: "medication",
+          index,
+        },
+      ];
+    }
+
     if (!value.dosage_instruction.length) {
       return [
         ...errors,
@@ -1682,6 +1695,7 @@ const MedicationRequestGridRow: React.FC<MedicationRequestGridRowProps> = ({
           <span
             className={cn(
               "wrap-break-word line-clamp-2 hidden lg:block",
+              hasError("medication") && "text-red-600",
               disabled &&
                 medication.status !== "entered_in_error" &&
                 "line-through",

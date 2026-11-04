@@ -21,12 +21,22 @@ import {
 import MultiFilter from "@/components/ui/multi-filter/MultiFilter";
 import useMultiFilterState from "@/components/ui/multi-filter/utils/useMultiFilterState";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import careConfig from "@careConfig";
 
 import { CardListSkeleton } from "@/components/Common/SkeletonLoading";
 
 import RailPanel from "@/components/Common/RailPanel";
 import { useEncounter } from "@/pages/Encounters/utils/EncounterProvider";
+import { createVaartaPublicKey } from "@/pages/Encounters/utils/vaartaCrypto";
+import { buildVaartaUrl } from "@/pages/Encounters/utils/vaartaHandoff";
 import {
   ENCOUNTER_STATUS_COLORS,
   EncounterRead,
@@ -47,7 +57,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import TagBadge from "@/components/Tags/TagBadge";
 import { Badge } from "@/components/ui/badge";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import encounterApi from "@/types/emr/encounter/encounterApi";
 import query from "@/Utils/request/query";
@@ -58,6 +68,7 @@ import { format } from "date-fns";
 import { useAtom } from "jotai";
 import { useTranslation } from "react-i18next";
 import { useInView } from "react-intersection-observer";
+import { toast } from "sonner";
 
 import { encounterHistoryFiltersAtom } from "@/atoms/encounterFilterAtom";
 
@@ -204,6 +215,22 @@ function EncounterCard({
   );
 }
 
+// Template ids from the Vaarta workspace (GET /voice/api/v1/template); first is the default.
+const VAARTA_TEMPLATES = [
+  { id: "3b6f6d9e-0d7a-4a3c-9c6f-4a1e2f7c8d01", label: "Clinical Notes" },
+  { id: "7c2e1a54-9b3d-4e8f-a1c2-5d6e7f8a9b02", label: "SOAP Notes" },
+  { id: "e58a4c19-2f7b-4d61-8e3a-9b0c1d2e3f03", label: "Prescription Print" },
+];
+
+// Languages are shown in their own script so they're recognisable regardless of UI language
+const VAARTA_LANGUAGES = [
+  { code: "en", label: "English" },
+  { code: "hi", label: "हिन्दी (Hindi)" },
+  { code: "kn", label: "ಕನ್ನಡ (Kannada)" },
+  { code: "ml", label: "മലയാളം (Malayalam)" },
+  { code: "bn", label: "বাংলা (Bengali)" },
+];
+
 interface Props {
   onSelect?: () => void;
 }
@@ -267,8 +294,39 @@ const EncounterHistoryList = ({ onSelect }: Props) => {
     selectedEncounterId,
     setSelectedEncounter,
     patientId,
+    patient,
     facilityId,
   } = useEncounter();
+
+  const [vaartaLanguage, setVaartaLanguage] = useState("en");
+  const [vaartaTemplate, setVaartaTemplate] = useState(VAARTA_TEMPLATES[0].id);
+
+  // The tab opens inside the click so it isn't blocked, then waits for the key pair.
+  const openVaarta = async (encounter: EncounterRead) => {
+    const tab = window.open("", "_blank");
+    if (!tab) return;
+    tab.opener = null;
+    const patientName = patient?.name ?? "";
+    const publicKey = await createVaartaPublicKey().catch(() => null);
+    if (!publicKey) {
+      tab.close();
+      toast.error(t("vaarta_handoff_failed"));
+      return;
+    }
+    const url = buildVaartaUrl(careConfig.vaartaUrl, {
+      encounterId: encounter.id,
+      title: `${patientName} · ${t(`encounter_class__${encounter.encounter_class}`)}`,
+      attendees: [
+        `${patientName} (patient)`,
+        ...encounter.care_team.map((member) => formatName(member.member)),
+      ].join(", "),
+      languageHint: vaartaLanguage,
+      templates: vaartaTemplate,
+      callbackUrl: window.location.href,
+      publicKey,
+    });
+    tab.location.href = url;
+  };
 
   const handleSelect = (encounterId: string | null) => {
     setSelectedEncounter(encounterId);
@@ -428,6 +486,43 @@ const EncounterHistoryList = ({ onSelect }: Props) => {
               onSelect={() => handleSelect(null)}
               facilityId={facilityId}
             />
+            <Select value={vaartaLanguage} onValueChange={setVaartaLanguage}>
+              <SelectTrigger
+                className="w-full lg:w-80 bg-white"
+                aria-label={t("select_language")}
+              >
+                <SelectValue placeholder={t("select_language")} />
+              </SelectTrigger>
+              <SelectContent>
+                {VAARTA_LANGUAGES.map(({ code, label }) => (
+                  <SelectItem key={code} value={code}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={vaartaTemplate} onValueChange={setVaartaTemplate}>
+              <SelectTrigger
+                className="w-full lg:w-80 bg-white"
+                aria-label={t("select_template")}
+              >
+                <SelectValue placeholder={t("select_template")} />
+              </SelectTrigger>
+              <SelectContent>
+                {VAARTA_TEMPLATES.map(({ id, label }) => (
+                  <SelectItem key={id} value={id}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              variant="primary_gradient"
+              className="text-base font-semibold rounded-md w-full lg:w-80"
+              onClick={() => openVaarta(primaryEncounter)}
+            >
+              {t("take_notes_on_vaarta")}
+            </Button>
           </div>
         </div>
       )}

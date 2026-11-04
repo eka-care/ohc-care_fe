@@ -29,6 +29,7 @@ import { EncounterOverviewTab } from "@/pages/Encounters/tabs/overview";
 import { EncounterPlotsTab } from "@/pages/Encounters/tabs/plots";
 import { EncounterResponsesTab } from "@/pages/Encounters/tabs/responses";
 import { useEncounter } from "@/pages/Encounters/utils/EncounterProvider";
+import { useVaartaReturn } from "@/pages/Encounters/utils/useVaartaReturn";
 import { PLUGIN_Component } from "@/PluginEngine";
 import {
   ENCOUNTER_STATUS_COLORS,
@@ -104,6 +105,12 @@ export const EncounterShow = (props: Props) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPrimaryEncounterLoading, isPatientLoading]);
+
+  useVaartaReturn({
+    facilityId,
+    patientId,
+    encounterId: primaryEncounterId,
+  });
 
   if (
     isPrimaryEncounterLoading ||

@@ -539,6 +539,17 @@ export default defineConfig(async ({ mode }): Promise<UserConfig> => {
       port: 4000,
       host: "0.0.0.0",
       allowedHosts: true,
+      // Opt-in dev proxy for backends that don't allow localhost via CORS.
+      // Set DEV_API_PROXY_TARGET and point REACT_CARE_API_URL at this server.
+      proxy: env.DEV_API_PROXY_TARGET
+        ? {
+            "/api": {
+              target: env.DEV_API_PROXY_TARGET,
+              changeOrigin: true,
+              secure: true,
+            },
+          }
+        : undefined,
       watch: {
         // Ignore test files from file watching to avoid unnecessary HMR triggers
         ignored: [
