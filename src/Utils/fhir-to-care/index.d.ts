@@ -1,4 +1,4 @@
-// Vendored from shyamvlmna/fhir2emr-adapters care/js at 94527b4 with @/ imports; change it there first.
+// Vendored from shyamvlmna/fhir2emr-adapters care/js at cc4860e with @/ imports; change it there first.
 import { Code } from "@/types/base/code/code";
 import { AllergyIntoleranceRequest } from "@/types/emr/allergyIntolerance/allergyIntolerance";
 import { DiagnosisRequest } from "@/types/emr/diagnosis/diagnosis";

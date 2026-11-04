@@ -1,4 +1,5 @@
 import {
+  codeOf,
   notesOf,
   pick,
   resourcesOf,
@@ -27,6 +28,18 @@ const INTENTS = [
   "filler_order",
   "instance_order",
 ];
+const CATEGORIES = ["inpatient", "outpatient", "community", "discharge"];
+const PRIORITIES = ["routine", "urgent", "asap", "stat"];
+// v3-ActCode encounter classes that tell CARE where the medicine is given.
+const CATEGORY_BY_ENCOUNTER_CLASS = {
+  AMB: "outpatient",
+  VR: "outpatient",
+  HH: "community",
+  IMP: "inpatient",
+  ACUTE: "inpatient",
+  EMER: "inpatient",
+};
+
 const STATEMENT_STATUSES = [
   "active",
   "on_hold",
@@ -38,8 +51,10 @@ const STATEMENT_STATUSES = [
   "intended",
 ];
 
-// FHIR's "stopped" request is CARE's "ended".
+// FHIR's "stopped" request is CARE's "ended". CARE requires category and priority;
+// its own Rx pad defaults them to inpatient and routine.
 export function parseMedicationRequests(bundle, encounter) {
+  const encounterCategory = encounterCategoryOf(bundle);
   return resourcesOf(bundle, "MedicationRequest").map((req) => {
     const status =
       snake(req.status) === "stopped" ? "ended" : snake(req.status);
@@ -47,6 +62,12 @@ export function parseMedicationRequests(bundle, encounter) {
     return {
       status: pick(status, REQUEST_STATUSES, "active"),
       intent: pick(snake(req.intent), INTENTS, "order"),
+      category: pick(
+        codeOf(req.category?.[0]),
+        CATEGORIES,
+        encounterCategory ?? "inpatient",
+      ),
+      priority: pick(req.priority, PRIORITIES, "routine"),
       do_not_perform: req.doNotPerform === true,
       medication: toCode(req.medication?.concept),
       dosage_instruction: (req.dosageInstruction ?? []).map((d) =>
@@ -79,4 +100,12 @@ export function parseMedicationStatements(bundle, encounter) {
       ...(encounter && { encounter }),
     };
   });
+}
+
+function encounterCategoryOf(bundle) {
+  const [encounter] = resourcesOf(bundle, "Encounter");
+  const classes = [encounter?.class ?? []].flat();
+  return classes
+    .map((c) => CATEGORY_BY_ENCOUNTER_CLASS[codeOf(c) ?? c.code])
+    .find(Boolean);
 }
