@@ -1,76 +1,51 @@
-// Builds the CARE → Vaarta handoff link and reads the note Vaarta sends back.
+// Builds the CARE → Vaarta handoff link and reads the doc_urls Vaarta sends back.
 // Kept free of app imports so it can be unit-tested with `tsx --test`.
 
-export const VAARTA_URL = "http://localhost:3000/";
-
-const RETURN_PARAM = "vaarta_session_id";
-const NOTE_PARAM = "vaarta_note";
-
-export interface VaartaAttendee {
-  name: string;
-  role: string;
-}
+const DOC_URL_PARAM = "doc_url";
+// Vaarta appends these to callback_url on publish.
+const RETURN_PARAMS = [DOC_URL_PARAM, "document_id", "session_id"];
 
 export interface VaartaHandoffParams {
-  sessionId: string;
-  sessionTitle: string;
-  attendees: VaartaAttendee[];
-  language: string;
-  templateId: string;
+  encounterId: string;
+  title: string;
+  attendees: string;
+  languageHint: string;
+  templates: string;
   callbackUrl: string;
+  publicKey: string;
 }
 
+// Vaarta's generic EMR redirect; encounter_id is not session_id, which pins Vaarta's own id.
 export function buildVaartaUrl(
   baseUrl: string,
   p: VaartaHandoffParams,
 ): string {
-  const url = new URL(baseUrl);
+  const url = new URL("embed", baseUrl);
   url.search = new URLSearchParams({
-    session_id: p.sessionId,
-    session_title: p.sessionTitle,
-    attendees: JSON.stringify(p.attendees),
-    language: p.language,
-    template_id: p.templateId,
     callback_url: p.callbackUrl,
+    title: p.title,
+    attendees: p.attendees,
+    language_hint: p.languageHint,
+    templates: p.templates,
+    encounter_id: p.encounterId,
+    public_key: p.publicKey,
   }).toString();
   return url.toString();
 }
 
-export interface VaartaReturn {
-  sessionId: string;
-  note: string;
-}
-
-// Vaarta's "Send to CARE" puts the note in the URL fragment so it never reaches a server.
-export function readVaartaReturn(hash: string): VaartaReturn | null {
-  const params = new URLSearchParams(hash.replace(/^#/, ""));
-  const note = params.get(NOTE_PARAM);
-  if (!note?.trim()) return null;
-  return { sessionId: params.get(RETURN_PARAM) ?? "", note };
-}
-
-// The Vaarta tab this page opened posts its note here via window.opener.
-// Only messages from Vaarta's origin, for the encounter on screen, count.
-export function readVaartaMessage(
-  origin: string,
-  data: unknown,
-  vaartaOrigin: string,
-  encounterId: string,
-): VaartaReturn | null {
-  if (origin !== vaartaOrigin || typeof data !== "object" || !data) return null;
-  const msg = data as Record<string, unknown>;
-  if (msg.type !== "vaarta:note" || msg.encounterId !== encounterId) {
-    return null;
-  }
-  if (typeof msg.note !== "string" || !msg.note.trim()) return null;
-  return {
-    sessionId: typeof msg.sessionId === "string" ? msg.sessionId : "",
-    note: msg.note,
-  };
+// Only urls on Vaarta's own origin are fetched, never arbitrary ones from the query string.
+export function readVaartaDocUrls(search: string, vaartaOrigin: string) {
+  return new URLSearchParams(search).getAll(DOC_URL_PARAM).filter((raw) => {
+    try {
+      return new URL(raw).origin === vaartaOrigin;
+    } catch {
+      return false;
+    }
+  });
 }
 
 export function stripVaartaReturn(href: string): string {
   const url = new URL(href);
-  url.hash = "";
+  RETURN_PARAMS.forEach((param) => url.searchParams.delete(param));
   return url.toString();
 }

@@ -29,15 +29,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import careConfig from "@careConfig";
 
 import { CardListSkeleton } from "@/components/Common/SkeletonLoading";
 
 import RailPanel from "@/components/Common/RailPanel";
 import { useEncounter } from "@/pages/Encounters/utils/EncounterProvider";
-import {
-  VAARTA_URL,
-  buildVaartaUrl,
-} from "@/pages/Encounters/utils/vaartaHandoff";
+import { createVaartaPublicKey } from "@/pages/Encounters/utils/vaartaCrypto";
+import { buildVaartaUrl } from "@/pages/Encounters/utils/vaartaHandoff";
 import {
   ENCOUNTER_STATUS_COLORS,
   EncounterRead,
@@ -69,6 +68,7 @@ import { format } from "date-fns";
 import { useAtom } from "jotai";
 import { useTranslation } from "react-i18next";
 import { useInView } from "react-intersection-observer";
+import { toast } from "sonner";
 
 import { encounterHistoryFiltersAtom } from "@/atoms/encounterFilterAtom";
 
@@ -301,24 +301,31 @@ const EncounterHistoryList = ({ onSelect }: Props) => {
   const [vaartaLanguage, setVaartaLanguage] = useState("en");
   const [vaartaTemplate, setVaartaTemplate] = useState(VAARTA_TEMPLATES[0].id);
 
-  const openVaarta = (encounter: EncounterRead) => {
+  // The tab opens inside the click so it isn't blocked, then waits for the key pair.
+  const openVaarta = async (encounter: EncounterRead) => {
+    const tab = window.open("", "_blank");
+    if (!tab) return;
+    tab.opener = null;
     const patientName = patient?.name ?? "";
-    const url = buildVaartaUrl(VAARTA_URL, {
-      sessionId: encounter.id,
-      sessionTitle: `${patientName} · ${t(`encounter_class__${encounter.encounter_class}`)}`,
+    const publicKey = await createVaartaPublicKey().catch(() => null);
+    if (!publicKey) {
+      tab.close();
+      toast.error(t("vaarta_handoff_failed"));
+      return;
+    }
+    const url = buildVaartaUrl(careConfig.vaartaUrl, {
+      encounterId: encounter.id,
+      title: `${patientName} · ${t(`encounter_class__${encounter.encounter_class}`)}`,
       attendees: [
-        { name: patientName, role: "patient" },
-        ...encounter.care_team.map((member) => ({
-          name: formatName(member.member),
-          role: member.role.display || "care_team",
-        })),
-      ],
-      language: vaartaLanguage,
-      templateId: vaartaTemplate,
+        `${patientName} (patient)`,
+        ...encounter.care_team.map((member) => formatName(member.member)),
+      ].join(", "),
+      languageHint: vaartaLanguage,
+      templates: vaartaTemplate,
       callbackUrl: window.location.href,
+      publicKey,
     });
-    // No noopener: Vaarta posts the finished note back to this tab via window.opener.
-    window.open(url, "_blank");
+    tab.location.href = url;
   };
 
   const handleSelect = (encounterId: string | null) => {

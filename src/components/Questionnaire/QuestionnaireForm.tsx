@@ -1,4 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useAtom } from "jotai";
 import { navigate, useNavigationPrompt, useQueryParams } from "raviger";
 import { useEffect, useMemo, useState } from "react";
 import { flushSync } from "react-dom";
@@ -58,6 +59,8 @@ import { FIXED_QUESTIONNAIRES } from "./data/StructuredFormData";
 import { getStructuredRequests } from "./structured/handlers";
 
 import queryClient from "@/Utils/request/queryClient";
+
+import { questionnairePrefillAtom } from "@/atoms/questionnairePrefillAtom";
 
 export interface QuestionnaireFormState {
   questionnaire: QuestionnaireRead;
@@ -365,6 +368,16 @@ const initializeResponses = (
   return responses;
 };
 
+// Fills each structured question with the prefilled value of the same type.
+const applyPrefill = (
+  responses: QuestionnaireResponse[],
+  values: ResponseValue[],
+): QuestionnaireResponse[] =>
+  responses.map((response) => {
+    const value = values.find((v) => v.type === response.structured_type);
+    return value ? { ...response, values: [value] } : response;
+  });
+
 export function QuestionnaireForm({
   questionnaireSlug,
   patientId,
@@ -386,6 +399,7 @@ export function QuestionnaireForm({
   const [activeGroupId, setActiveGroupId] = useState<string>();
   const [isInitialized, setIsInitialized] = useState(false);
   const [draftMismatchError, setDraftMismatchError] = useState(false);
+  const [prefill, setPrefill] = useAtom(questionnairePrefillAtom);
 
   const {
     data: questionnaireData,
@@ -614,14 +628,21 @@ export function QuestionnaireForm({
           setIsInitialized(true);
         }
       } else if (questionnaire) {
-        // No draft, initialize with empty responses
+        const prefillValues =
+          prefill && prefill.encounterId === encounterId
+            ? prefill.values
+            : undefined;
         setQuestionnaireForms([
           {
             questionnaire,
-            responses: initializeResponses(questionnaire.questions),
+            responses: applyPrefill(
+              initializeResponses(questionnaire.questions),
+              prefillValues ?? [],
+            ),
             errors: [],
           },
         ]);
+        if (prefillValues) setPrefill(null);
         setIsInitialized(true);
       }
     }
@@ -632,6 +653,9 @@ export function QuestionnaireForm({
     continueDraftId,
     draftData,
     isDraftFetching,
+    prefill,
+    setPrefill,
+    encounterId,
   ]);
 
   // Show loading while fetching questionnaire or draft

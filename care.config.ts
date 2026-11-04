@@ -53,6 +53,7 @@ const resolveApiUrl = (): string => {
 const careConfig = {
   apiUrl: resolveApiUrl(),
   sbomBaseUrl: env.REACT_SBOM_BASE_URL || "https://sbom.ohc.network",
+  vaartaUrl: env.REACT_VAARTA_URL || "http://localhost:8000/",
   urls: {
     github: env.REACT_GITHUB_URL || "https://github.com/ohcnetwork",
     ohcn: env.REACT_OHCN_URL || "https://ohc.network?ref=care",

@@ -3,7 +3,6 @@ import {
   PatientHeader,
 } from "@/components/Patient/PatientHeader";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { useEffect, useState } from "react";
 
@@ -30,13 +29,7 @@ import { EncounterOverviewTab } from "@/pages/Encounters/tabs/overview";
 import { EncounterPlotsTab } from "@/pages/Encounters/tabs/plots";
 import { EncounterResponsesTab } from "@/pages/Encounters/tabs/responses";
 import { useEncounter } from "@/pages/Encounters/utils/EncounterProvider";
-import { saveVaartaNote } from "@/pages/Encounters/utils/saveVaartaNote";
-import {
-  VAARTA_URL,
-  readVaartaMessage,
-  readVaartaReturn,
-  stripVaartaReturn,
-} from "@/pages/Encounters/utils/vaartaHandoff";
+import { useVaartaReturn } from "@/pages/Encounters/utils/useVaartaReturn";
 import { PLUGIN_Component } from "@/PluginEngine";
 import {
   ENCOUNTER_STATUS_COLORS,
@@ -81,7 +74,6 @@ export const EncounterShow = (props: Props) => {
   } = useEncounter();
 
   useSidebarAutoCollapse();
-  const queryClient = useQueryClient();
   const [actionsOpen, setActionsOpen] = useState(false);
   useShortcutSubContext("encounter");
 
@@ -114,57 +106,11 @@ export const EncounterShow = (props: Props) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPrimaryEncounterLoading, isPatientLoading]);
 
-  // Vaarta's "Send to CARE" returns here with the note in the URL fragment.
-  // Strip it before saving so a refresh can't save the note twice.
-  useEffect(() => {
-    const vaarta = readVaartaReturn(window.location.hash);
-    if (!vaarta) return;
-    window.history.replaceState(
-      null,
-      "",
-      stripVaartaReturn(window.location.href),
-    );
-    saveVaartaNote(patientId, primaryEncounterId, vaarta.note)
-      .then(() => {
-        queryClient.invalidateQueries({ queryKey: ["threads"] });
-        toast.success(t("vaarta_note_saved"));
-      })
-      .catch(() => toast.error(t("vaarta_note_save_failed")));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // The Vaarta tab opened from this encounter posts its note here; save it and
-  // confirm so Vaarta can close its tab (no confirmation → it returns here itself).
-  useEffect(() => {
-    const vaartaOrigin = new URL(VAARTA_URL).origin;
-    const onMessage = (event: MessageEvent) => {
-      const vaarta = readVaartaMessage(
-        event.origin,
-        event.data,
-        vaartaOrigin,
-        primaryEncounterId,
-      );
-      if (!vaarta) return;
-      const reply = (ok: boolean) =>
-        (event.source as Window | null)?.postMessage(
-          { type: "vaarta:note-saved", sessionId: vaarta.sessionId, ok },
-          event.origin,
-        );
-      saveVaartaNote(patientId, primaryEncounterId, vaarta.note)
-        .then(() => {
-          queryClient.invalidateQueries({ queryKey: ["threads"] });
-          toast.success(t("vaarta_note_saved"));
-          window.focus();
-          reply(true);
-        })
-        .catch(() => {
-          toast.error(t("vaarta_note_save_failed"));
-          reply(false);
-        });
-    };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [patientId, primaryEncounterId, queryClient, t]);
+  useVaartaReturn({
+    facilityId,
+    patientId,
+    encounterId: primaryEncounterId,
+  });
 
   if (
     isPrimaryEncounterLoading ||
