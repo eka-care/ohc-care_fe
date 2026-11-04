@@ -26,6 +26,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const careApi = {
+  fileScribeFhir: (
+    encounterId: string,
+    body: { bundle: unknown; session_id: string },
+  ) =>
+    request<unknown>(
+      `/api/care_scribe/encounters/${encounterId}/scribe/fhir/`,
+      { method: "POST", body: JSON.stringify(body) },
+    ),
+
   currentUser: () => request<UserMinimal>("/api/v1/users/getcurrentuser/"),
 
   questionnaire: (slug: string) =>
