@@ -8,7 +8,7 @@ import {
 
 import { NonEmptyArray } from "@/Utils/types";
 import Decimal from "decimal.js";
-import { CountryCode } from "libphonenumber-js/types.cjs";
+import { CountryCode } from "libphonenumber-js";
 
 const env = import.meta.env;
 
@@ -53,7 +53,6 @@ const resolveApiUrl = (): string => {
 const careConfig = {
   apiUrl: resolveApiUrl(),
   sbomBaseUrl: env.REACT_SBOM_BASE_URL || "https://sbom.ohc.network",
-  vaartaUrl: env.REACT_VAARTA_URL || "http://localhost:8000/",
   urls: {
     github: env.REACT_GITHUB_URL || "https://github.com/ohcnetwork",
     ohcn: env.REACT_OHCN_URL || "https://ohc.network?ref=care",
@@ -80,8 +79,7 @@ const careConfig = {
       : undefined),
 
   defaultDischargeDisposition: env.REACT_DEFAULT_DISCHARGE_DISPOSITION as
-    | EncounterDischargeDisposition
-    | undefined,
+    EncounterDischargeDisposition | undefined,
 
   mapFallbackUrlTemplate:
     env.REACT_MAPS_FALLBACK_URL_TEMPLATE ||
@@ -227,7 +225,7 @@ const careConfig = {
     : [],
 
   appStore: {
-    indexUrl: env.REACT_APP_STORE_INDEX_URL,
+    apiUrl: env.REACT_APP_STORE_API_URL,
   },
 
   plotsConfigUrl:
@@ -250,6 +248,21 @@ const careConfig = {
   imageUploadMaxSizeInMB: env.REACT_APP_MAX_IMAGE_UPLOAD_SIZE_MB
     ? parseInt(env.REACT_APP_MAX_IMAGE_UPLOAD_SIZE_MB, 10)
     : 2,
+
+  pagination: {
+    limitOffset: {
+      /**
+       * The maximum limit allowed for pagination in limit-offset style
+       * pagination. This is a safeguard to prevent excessive data fetching if
+       * the frontend accidentally requests too much data. This should match the
+       * maximum limit enforced by the backend API for limit-offset pagination.
+       */
+      maxLimit: parseInt(
+        env.REACT_PAGINATION_LIMIT_OFFSET_MAX_LIMIT || "200",
+        10,
+      ),
+    },
+  },
 
   /**
    * Disable patient login if set to "true"
@@ -328,6 +341,15 @@ const careConfig = {
   ),
 
   /**
+   * Enable questionnaire draft-saving if set to "true".
+   * When disabled, users cannot save questionnaire responses as drafts.
+   */
+  enableQuestionnaireDraft: booleanFromString(
+    env.REACT_ENABLE_QUESTIONNAIRE_DRAFT,
+    false,
+  ),
+
+  /**
    * Default state for tax inclusive pricing in inventory
    * When true, base price is calculated from MRP by removing tax
    */
@@ -399,6 +421,14 @@ const careConfig = {
   maxFormDialogFavorites: env.REACT_MAX_FORM_DIALOG_FAVORITES
     ? parseInt(env.REACT_MAX_FORM_DIALOG_FAVORITES, 10)
     : 5,
+
+  /**
+   * Maximum number of datapoints allowed in a single upsert request.
+   * This should be set with whatever backend sets.
+   */
+  maxDatapointsPerUpsert: env.REACT_MAX_DATAPOINTS_PER_UPSERT
+    ? parseInt(env.REACT_MAX_DATAPOINTS_PER_UPSERT, 10)
+    : 100,
 } as const;
 
 export default careConfig;

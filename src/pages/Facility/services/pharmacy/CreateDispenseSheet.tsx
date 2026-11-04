@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Plus } from "lucide-react";
 import { navigate } from "raviger";
-import { useCallback, useState } from "react";
+import { cloneElement, isValidElement, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
@@ -113,17 +113,20 @@ export function CreateDispenseSheet({
 
   // When patientId is provided, render a simple button that navigates directly
   if (patientId && preselectedPatient) {
-    const triggerElement = trigger || (
-      <Button>
-        <Plus className="size-4 mr-1" />
-        {t("new_dispense")}
-      </Button>
-    );
-
+    if (isValidElement<{ onClick?: React.MouseEventHandler }>(trigger)) {
+      return cloneElement(trigger, {
+        onClick: (event) => {
+          trigger.props.onClick?.(event);
+          if (!event.defaultPrevented) handleDirectDispense();
+        },
+      });
+    }
     return (
-      <span onClick={handleDirectDispense} className="cursor-pointer">
-        {triggerElement}
-      </span>
+      <Button onClick={handleDirectDispense}>
+        <Plus className="size-4 mr-1" />
+        {trigger || t("new_dispense")}
+        <ShortcutBadge actionId="dispense-button" />
+      </Button>
     );
   }
 

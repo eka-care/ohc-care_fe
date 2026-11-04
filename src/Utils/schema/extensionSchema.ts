@@ -1,4 +1,3 @@
-import { JSONSchema, JSONSchemaToZod } from "@dmitryrechkin/json-schema-to-zod";
 import { z } from "zod";
 
 import {
@@ -14,28 +13,6 @@ import {
 } from "./types";
 
 /**
- * Converts a JSON Schema to a Zod schema at runtime
- * @param schema - JSON Schema Draft 2020-12 object
- * @returns Zod schema for validation
- */
-export function convertJsonSchemaToZod(
-  schema: JSONSchema2020 | undefined,
-): z.ZodObject<Record<string, z.ZodTypeAny>> {
-  if (!schema || !schema.properties) {
-    return z.object({});
-  }
-
-  try {
-    // Cast to the package's expected JSONSchema type
-    const zodSchema = JSONSchemaToZod.convert(schema as unknown as JSONSchema);
-    return zodSchema as z.ZodObject<Record<string, z.ZodTypeAny>>;
-  } catch (error) {
-    console.error("Failed to convert JSON Schema to Zod:", error);
-    return z.object({});
-  }
-}
-
-/**
  * Format string to UI field type mapping
  */
 const FORMAT_TO_UI_TYPE: Record<string, UIFieldType> = {
@@ -45,6 +22,42 @@ const FORMAT_TO_UI_TYPE: Record<string, UIFieldType> = {
   email: "email",
   uri: "uri",
 };
+
+/** Recognize titled primitive choices without flattening general oneOf schemas. */
+export function getTitledEnumOptions(
+  property: JSONSchemaProperty,
+): ExtensionFieldMetadata["options"] {
+  if (!Array.isArray(property.oneOf) || !property.oneOf.length)
+    return undefined;
+  const values = new Set<unknown>();
+  const options: NonNullable<ExtensionFieldMetadata["options"]> = [];
+  for (const choice of property.oneOf) {
+    if (
+      !choice ||
+      typeof choice !== "object" ||
+      Object.keys(choice).some(
+        (key) => !["const", "title", "description"].includes(key),
+      ) ||
+      typeof choice.title !== "string" ||
+      !choice.title.trim() ||
+      (choice.description !== undefined &&
+        typeof choice.description !== "string")
+    )
+      return undefined;
+    const value = choice.const;
+    if (
+      (value !== null &&
+        typeof value !== "string" &&
+        typeof value !== "boolean" &&
+        !(typeof value === "number" && Number.isFinite(value))) ||
+      values.has(value)
+    )
+      return undefined;
+    values.add(value);
+    options.push({ value, label: choice.title });
+  }
+  return options;
+}
 
 /**
  * Extracts default values from a JSON Schema property (recursive for nested objects and arrays)
@@ -130,7 +143,7 @@ function determineFieldType(property: JSONSchemaProperty): UIFieldType {
   }
 
   // If it has enum options, render as select (unless x-ui specifies radio)
-  if (property.enum && property.enum.length > 0) {
+  if (getTitledEnumOptions(property) || property.enum?.length) {
     return "select";
   }
 
@@ -198,6 +211,9 @@ function extractPropertyMetadata(
     uiControl: xui?.control,
     uiVariant: xui?.variant,
     uiMetadata: xui?.metadata,
+    // Plugin-supplied, so ignore a malformed placement instead of crashing hosts
+    uiPlacement:
+      typeof xui?.placement?.after === "string" ? xui.placement : undefined,
     render_blacklist: xui?.render_blacklist,
   };
 
@@ -229,7 +245,10 @@ function extractPropertyMetadata(
   }
 
   // Add enum options
-  if (property.enum && property.enum.length > 0) {
+  const titledOptions = getTitledEnumOptions(property);
+  if (titledOptions) {
+    fieldMeta.options = titledOptions;
+  } else if (property.enum && property.enum.length > 0) {
     fieldMeta.options = property.enum.map((value) => ({
       value,
       label: String(value),
@@ -573,7 +592,7 @@ function validateNestedRequired(
 
       if (nested.required && isEmptyValue(nestedValue)) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           message: `${nested.label} is required`,
           path: nestedPath.split("."),
         });
@@ -604,8 +623,8 @@ function validateNestedRequired(
 export function createExtensionValidationSchema(
   fieldMetadata: ExtensionFieldMetadata[],
   conditionalRules: ConditionalRule[],
-): z.ZodType<Record<string, unknown>> {
-  return z.record(z.unknown()).superRefine((data, ctx) => {
+): z.ZodType<Record<string, unknown>, Record<string, unknown>> {
+  return z.record(z.string(), z.unknown()).superRefine((data, ctx) => {
     // Debug: uncomment to see validation running
     // console.log("[ExtensionValidation] Running validation on:", data);
     if (!data) return;
@@ -637,7 +656,7 @@ export function createExtensionValidationSchema(
         // If the object doesn't exist and is required, show error
         if (isRequired && (value === undefined || value === null)) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             message: `${field.label} is required`,
             path: [field.name],
           });
@@ -660,7 +679,7 @@ export function createExtensionValidationSchema(
         // Check required (minItems >= 1 or explicitly required)
         if (isRequired && arrayValue.length === 0) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             message: `${field.label} requires at least one item`,
             path: [field.name],
           });
@@ -672,7 +691,7 @@ export function createExtensionValidationSchema(
           arrayValue.length < field.minItems
         ) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             message: `${field.label} requires at least ${field.minItems} item(s)`,
             path: [field.name],
           });
@@ -684,7 +703,7 @@ export function createExtensionValidationSchema(
           arrayValue.length > field.maxItems
         ) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             message: `${field.label} cannot have more than ${field.maxItems} item(s)`,
             path: [field.name],
           });
@@ -693,7 +712,7 @@ export function createExtensionValidationSchema(
         // For non-object/non-array types, check if required and empty
         if (isRequired && isEmptyValue(value)) {
           ctx.addIssue({
-            code: z.ZodIssueCode.custom,
+            code: "custom",
             message: `${field.label} is required`,
             path: [field.name],
           });

@@ -167,7 +167,7 @@ interface ProductKnowledgeListProps {
   setAllowCategoryCreate: (allow: boolean) => void;
 }
 
-export function ProductKnowledgeList({
+export function ProductKnowledgeListContent({
   facilityId,
   categorySlug,
   setAllowCategoryCreate,
@@ -275,7 +275,7 @@ export function ProductKnowledgeList({
         <>
           {/* Desktop Table View */}
           <div className="hidden lg:block">
-            <div className="border rounded-lg overflow-hidden">
+            <div className="rounded-md overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>

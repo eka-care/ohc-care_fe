@@ -1,16 +1,16 @@
 import { useMutation } from "@tanstack/react-query";
 import { useAtom } from "jotai";
 import { ArrowLeft, ArrowRight } from "lucide-react";
-import { navigate } from "raviger";
+import { Link, navigate } from "raviger";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
 
 import { scheduleServiceTypeAtom } from "@/atoms/scheduleServiceTypeAtom";
+import { useAppointmentReferral } from "@/components/Referral/useAppointmentReferral";
 import { Button } from "@/components/ui/button";
 import { Drawer, DrawerContent, DrawerTrigger } from "@/components/ui/drawer";
 
-import { register } from "@/lib/override";
 import { AppointmentSlotPicker } from "@/pages/Appointments/BookAppointment/AppointmentSlotPicker";
 import useCurrentFacility from "@/pages/Facility/utils/useCurrentFacility";
 import { TagConfig } from "@/types/emr/tagConfig/tagConfig";
@@ -27,20 +27,24 @@ export interface BookAppointmentDetailsProps {
   onSuccess?: () => void;
 }
 
-const BookAppointmentDetailsBase = ({
+export const BookAppointmentDetails = ({
   patientId,
   onSuccess,
 }: BookAppointmentDetailsProps) => {
   const { t } = useTranslation();
 
   const { facilityId } = useCurrentFacility();
+  const referralContext = useAppointmentReferral(patientId);
+  const referralBlocked =
+    referralContext.requested && !referralContext.referral;
   const [cachedServiceType, setCachedServiceType] = useAtom(
     scheduleServiceTypeAtom,
   );
 
   const [selectedSlotId, setSelectedSlotId] = useState<string>();
   const [selectedTags, setSelectedTags] = useState<TagConfig[]>([]);
-  const [reason, setReason] = useState("");
+  const [editedReason, setReason] = useState<string>();
+  const reason = editedReason ?? referralContext.referral?.title ?? "";
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [isOpen, setIsOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState<1 | 2>(1);
@@ -67,10 +71,16 @@ const BookAppointmentDetailsBase = ({
   ]);
 
   const handleResourceChange = (resource: ScheduleResourceFormState) => {
+    setSelectedSlotId(undefined);
     setSelectedResource(resource);
     if (resource.resource_type !== cachedServiceType) {
       setCachedServiceType(resource.resource_type);
     }
+  };
+
+  const handleDateChange = (date: Date) => {
+    setSelectedSlotId(undefined);
+    setSelectedDate(date);
   };
 
   const { mutateAsync: createAppointment, isPending: isCreating } = useMutation(
@@ -78,25 +88,38 @@ const BookAppointmentDetailsBase = ({
       mutationFn: mutate(scheduleApi.slots.createAppointment, {
         pathParams: { facilityId, slotId: selectedSlotId ?? "" },
       }),
-      onSuccess: (data: Appointment) => {
+      onSuccess: async (data: Appointment) => {
         toast.success(t("appointment_created_successfully"));
+        if (referralContext.referral) {
+          try {
+            await referralContext.attachAppointment(data);
+          } catch {
+            // Booking succeeded. Continue to its detail page, where linking
+            // can be retried without creating another appointment.
+            toast.error(t("referral_appointment_link_failed"));
+          }
+        }
         onSuccess?.();
+        const params = new URLSearchParams({
+          showSuccess: "true",
+          ...referralContext.successQueryParams,
+        });
         navigate(
-          `/facility/${facilityId}/patient/${patientId}/appointments/${data.id}?showSuccess=true`,
+          `/facility/${facilityId}/patient/${patientId}/appointments/${data.id}?${params}`,
         );
       },
     },
   );
 
   const handleSubmit = async () => {
-    if (!selectedResource || !selectedSlotId) {
+    if (!selectedResource || !selectedSlotId || referralBlocked) {
       return;
     }
 
     await createAppointment({
       patient: patientId,
       note: reason,
-      tags: selectedTags.map((tag) => tag.id),
+      tags: selectedTags.map((tag) => ({ tag: tag.id })),
     });
   };
 
@@ -110,6 +133,33 @@ const BookAppointmentDetailsBase = ({
 
   return (
     <div className="w-full">
+      {referralContext.requested && (
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm">
+          <p role={referralContext.error ? "alert" : "status"}>
+            {referralContext.error ??
+              (referralContext.isLoading
+                ? t("loading")
+                : t("referral_booking_for", {
+                    title: referralContext.referral?.title,
+                  }))}
+          </p>
+          {referralContext.canRetry && (
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={referralContext.isRefetching}
+              onClick={() => void referralContext.refetch()}
+            >
+              {t("retry")}
+            </Button>
+          )}
+          {referralContext.returnUrl && (
+            <Link className="underline" href={referralContext.returnUrl}>
+              {t("referral_return_to_referral")}
+            </Link>
+          )}
+        </div>
+      )}
       <div className="flex flex-row gap-4 justify-center">
         <div className="flex flex-col gap-8 p-4 w-114 bg-white shadow rounded-lg">
           <AppointmentFormSection
@@ -127,7 +177,7 @@ const BookAppointmentDetailsBase = ({
             facilityId={facilityId}
             resourceId={selectedResource.resource?.id}
             resourceType={selectedResource.resource_type}
-            setSelectedDate={setSelectedDate}
+            setSelectedDate={handleDateChange}
             selectedDate={selectedDate}
           />
           <div className="w-full overflow-y-auto max-h-[calc(100vh-17rem)]">
@@ -160,7 +210,7 @@ const BookAppointmentDetailsBase = ({
               size="sm"
               onClick={handleSubmit}
               type="submit"
-              disabled={isCreating}
+              disabled={isCreating || referralBlocked}
             >
               {t("confirm_appointment")}
             </Button>
@@ -181,17 +231,23 @@ const BookAppointmentDetailsBase = ({
             <ArrowRight size={16} />
           </Button>
         </DrawerTrigger>
-        <DrawerContent className="w-full p-4 space-y-4">
-          <div className="flex flex-col gap-3 overflow-y-auto -mx-2">
+        <DrawerContent
+          aria-describedby={undefined}
+          height="fixed"
+          className="p-1.5"
+        >
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden px-1 pt-2 pb-[env(safe-area-inset-bottom)]">
             {currentStep === 1 && (
               <>
-                <AppointmentDateSelection
-                  facilityId={facilityId}
-                  resourceId={selectedResource.resource?.id}
-                  resourceType={selectedResource.resource_type}
-                  setSelectedDate={setSelectedDate}
-                  selectedDate={selectedDate}
-                />
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  <AppointmentDateSelection
+                    facilityId={facilityId}
+                    resourceId={selectedResource.resource?.id}
+                    resourceType={selectedResource.resource_type}
+                    setSelectedDate={handleDateChange}
+                    selectedDate={selectedDate}
+                  />
+                </div>
                 <Button
                   className="w-full"
                   disabled={!selectedDate}
@@ -202,48 +258,42 @@ const BookAppointmentDetailsBase = ({
                 </Button>
               </>
             )}
+            {currentStep === 2 && (
+              <>
+                <AppointmentSlotPicker
+                  facilityId={facilityId}
+                  resourceId={selectedResource.resource?.id}
+                  resourceType={selectedResource.resource_type}
+                  selectedSlotId={selectedSlotId}
+                  onSlotSelect={setSelectedSlotId}
+                  selectedDate={selectedDate}
+                />
+                <div className="sm:hidden flex flex-row gap-2 items-center">
+                  <Button
+                    variant="outline"
+                    className="min-w-0 flex-auto"
+                    onClick={() => {
+                      setCurrentStep(1);
+                      setSelectedSlotId(undefined);
+                    }}
+                  >
+                    <ArrowLeft />
+                    {t("back")}
+                  </Button>
+                  <Button
+                    variant="primary"
+                    className="min-w-0 flex-auto"
+                    onClick={handleSubmit}
+                    disabled={!selectedSlotId || isCreating || referralBlocked}
+                  >
+                    {t("confirm_appointment")}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
-
-          {currentStep === 2 && (
-            <>
-              <AppointmentSlotPicker
-                facilityId={facilityId}
-                resourceId={selectedResource.resource?.id}
-                resourceType={selectedResource.resource_type}
-                selectedSlotId={selectedSlotId}
-                onSlotSelect={setSelectedSlotId}
-                selectedDate={selectedDate}
-              />
-              <div className="sm:hidden flex flex-row gap-2 items-center justify-around">
-                <Button
-                  variant="outline"
-                  className="w-fit"
-                  onClick={() => {
-                    setCurrentStep(1);
-                    setSelectedSlotId(undefined);
-                  }}
-                >
-                  <ArrowLeft />
-                  {t("back")}
-                </Button>
-                <Button
-                  variant="primary"
-                  className="w-full"
-                  onClick={handleSubmit}
-                  disabled={!selectedSlotId || isCreating}
-                >
-                  {t("confirm_appointment")}
-                </Button>
-              </div>
-            </>
-          )}
         </DrawerContent>
       </Drawer>
     </div>
   );
 };
-
-export const BookAppointmentDetails = register(
-  "BookAppointmentDetails",
-  BookAppointmentDetailsBase,
-);

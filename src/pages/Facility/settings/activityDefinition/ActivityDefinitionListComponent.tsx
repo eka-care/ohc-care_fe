@@ -171,7 +171,7 @@ interface ActivityDefinitionListProps {
   setAllowCategoryCreate: (allow: boolean) => void;
 }
 
-export function ActivityDefinitionList({
+export function ActivityDefinitionListContent({
   facilityId,
   categorySlug,
   setAllowCategoryCreate,
@@ -282,7 +282,7 @@ export function ActivityDefinitionList({
         <>
           {/* Desktop Table View */}
           <div className="hidden lg:block">
-            <div className="border rounded-lg overflow-hidden">
+            <div className="rounded-md overflow-hidden">
               <Table>
                 <TableHeader>
                   <TableRow>

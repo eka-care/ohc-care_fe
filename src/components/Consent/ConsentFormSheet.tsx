@@ -1,3 +1,4 @@
+import { Textarea } from "@/components/ui/textarea";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { t } from "i18next";
@@ -97,7 +98,7 @@ const consentFormSchema = (isEdit: boolean) =>
         data.period.start > data.period.end
       ) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           message: t("valid_from_after_valid_untill"),
           path: ["period.end"],
         });
@@ -108,7 +109,7 @@ const consentFormSchema = (isEdit: boolean) =>
         new Date(data.period.start) < new Date(data.date)
       ) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           message: t("consent_period_start_before_consent_date_validation"),
           path: ["period.start"],
         });
@@ -332,11 +333,13 @@ export default function ConsentFormSheet({
                       <FormLabel aria-required>
                         {t("consent_given_on")}
                       </FormLabel>
-                      <DateTimeInput
-                        {...field}
-                        value={field.value}
-                        onDateChange={(val) => field.onChange(val ?? null)}
-                      />
+                      <FormControl>
+                        <DateTimeInput
+                          {...field}
+                          value={field.value}
+                          onDateChange={(val) => field.onChange(val ?? null)}
+                        />
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -349,13 +352,15 @@ export default function ConsentFormSheet({
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>{t("consent_valid_from")}</FormLabel>
-                        <DateTimeInput
-                          {...field}
-                          value={field.value ?? ""}
-                          onDateChange={(val) => {
-                            field.onChange(val ?? null);
-                          }}
-                        />
+                        <FormControl>
+                          <DateTimeInput
+                            {...field}
+                            value={field.value ?? ""}
+                            onDateChange={(val) => {
+                              field.onChange(val ?? null);
+                            }}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -367,13 +372,15 @@ export default function ConsentFormSheet({
                     render={({ field }) => (
                       <FormItem className="flex flex-col">
                         <FormLabel>{t("consent_valid_until")}</FormLabel>
-                        <DateTimeInput
-                          {...field}
-                          value={field.value ?? ""}
-                          onDateChange={(val) => {
-                            field.onChange(val ?? null);
-                          }}
-                        />
+                        <FormControl>
+                          <DateTimeInput
+                            {...field}
+                            value={field.value ?? ""}
+                            onDateChange={(val) => {
+                              field.onChange(val ?? null);
+                            }}
+                          />
+                        </FormControl>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -422,7 +429,7 @@ export default function ConsentFormSheet({
                             </SelectValue>
                           </SelectTrigger>
                         </FormControl>
-                        <SelectContent className="max-w-[var(--radix-select-trigger-width)] w-full">
+                        <SelectContent className="max-w-[var(--anchor-width)] w-full">
                           {CONSENT_CATEGORIES.map((category) => (
                             <SelectItem key={category} value={category}>
                               <div className="flex flex-col gap-1">
@@ -489,11 +496,7 @@ export default function ConsentFormSheet({
                 <FormItem>
                   <FormLabel>{t("note")}</FormLabel>
                   <FormControl>
-                    <textarea
-                      className="w-full field-sizing-content focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500 rounded-md"
-                      rows={3}
-                      {...field}
-                    />
+                    <Textarea rows={3} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -571,11 +574,7 @@ export default function ConsentFormSheet({
               >
                 {t("cancel")}
               </Button>
-              <Button
-                type="submit"
-                className="bg-primary-600 hover:bg-primary-700"
-                disabled={isPending}
-              >
+              <Button type="submit" disabled={isPending}>
                 {isPending ? t("saving") : t("save")}
               </Button>
             </div>
