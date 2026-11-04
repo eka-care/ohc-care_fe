@@ -17,11 +17,4 @@ export const strings = {
   filedElsewhere: "This note is already filed on another encounter.",
   filingFailed: "Couldn't file the note from Vaarta. Try again.",
   retry: "Retry",
-  scribeSaid: (name: string) => `Vaarta: ${name}`,
-  chooseMedicine: "Choose medicine",
-  change: "Change",
-  leaveOut: "Leave out",
-  searchMedicines: "Search medicines",
-  searchFailed: "Couldn't search CARE's medicines. Try again.",
-  setInRxPad: (fields: string[]) => `Set in the Rx pad: ${fields.join(", ")}`,
 };

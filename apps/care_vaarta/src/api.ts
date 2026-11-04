@@ -1,5 +1,3 @@
-import { Code, Questionnaire, UserMinimal } from "@/types";
-
 export class CareApiError extends Error {
   constructor(
     message: string,
@@ -34,27 +32,4 @@ export const careApi = {
       `/api/care_scribe/encounters/${encounterId}/scribe/fhir/`,
       { method: "POST", body: JSON.stringify(body) },
     ),
-
-  currentUser: () => request<UserMinimal>("/api/v1/users/getcurrentuser/"),
-
-  questionnaire: (slug: string) =>
-    request<Questionnaire>(`/api/v1/questionnaire/${slug}/`),
-
-  searchValueSet: (slug: string, search: string, count: number) =>
-    request<{ results: Code[] }>(`/api/v1/valueset/${slug}/expand/`, {
-      method: "POST",
-      body: JSON.stringify({ search, count }),
-    }),
-
-  createDraft: (body: {
-    patient: string;
-    encounter: string;
-    questionnaire: string;
-    status: "draft";
-    response_dump: Record<string, unknown>;
-  }) =>
-    request<{ id: string }>("/api/v1/form_submission/", {
-      method: "POST",
-      body: JSON.stringify(body),
-    }),
 };
