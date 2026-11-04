@@ -1,9 +1,10 @@
 export const strings = {
-  takeNotes: "Take Notes On Vaarta",
+  widgetTitle: "Vaarta scribe",
+  widgetHint:
+    "Record the consultation in Vaarta; the note is filed here when you publish.",
   language: "Language",
   template: "Template",
   start: "Start",
-  cancel: "Cancel",
   handoffFailed: "Couldn't start Vaarta. Try again.",
   noDocUrl: "Vaarta didn't send a note to open.",
   keyMissing:

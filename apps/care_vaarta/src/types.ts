@@ -18,6 +18,7 @@ export interface CareTeamMember {
 
 export interface Encounter {
   id: string;
+  status: string;
   encounter_class: string;
   facility: { id: string };
   patient: { id: string; name: string };

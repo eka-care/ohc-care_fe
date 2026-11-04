@@ -23,7 +23,7 @@ const manifest = {
       ),
   },
   components: {
-    EncounterActions: lazy(() => import("@/components/VaartaButton")),
+    EncounterOverviewTop: lazy(() => import("@/components/VaartaWidget")),
   },
   extends: [],
   navItems: [],
