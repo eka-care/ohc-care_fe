@@ -20,23 +20,29 @@ export interface BatchRequestObject<T = unknown> {
 }
 
 export function useBatchRequest<TError = DefaultError, TContext = unknown>(
-  options: UseMutationOptions<
+  {
+    silent,
+    ...options
+  }: UseMutationOptions<
     BatchRequestResponse,
     TError,
     BatchRequestObject[],
     TContext
-  >,
+  > & { silent?: boolean },
   queryClient?: QueryClient,
 ) {
   const mutation = useMutation(
     {
       mutationFn: (requests: BatchRequestObject[]) =>
-        mutate({
-          path: "/api/v1/batch_requests/",
-          method: HttpMethod.POST,
-          TRes: Type<BatchRequestResponse>(),
-          TBody: Type<BatchRequestBody>(),
-        })({
+        mutate(
+          {
+            path: "/api/v1/batch_requests/",
+            method: HttpMethod.POST,
+            TRes: Type<BatchRequestResponse>(),
+            TBody: Type<BatchRequestBody>(),
+          },
+          { silent },
+        )({
           requests: requests.map((request) => ({
             url: makeUrl(request.api.path, undefined, request.pathParams),
             method: request.api.method ?? HttpMethod.GET,

@@ -16,10 +16,11 @@ import { DebugPreview } from "@/components/Common/DebugPreview";
 import Loading from "@/components/Common/Loading";
 
 import { PLUGIN_Component } from "@/PluginEngine";
+import { useBatchRequest } from "@/Utils/request/batch";
 import mutate from "@/Utils/request/mutate";
 import query from "@/Utils/request/query";
+import { HttpMethod, Type } from "@/Utils/request/types";
 import { dateQueryString } from "@/Utils/utils";
-import batchApi from "@/types/base/batch/batchApi";
 import { MedicationRequestCreate } from "@/types/emr/medicationRequest/medicationRequest";
 import { MedicationStatementRequest } from "@/types/emr/medicationStatement";
 import { FileUploadQuestion } from "@/types/files/file";
@@ -413,8 +414,8 @@ export function QuestionnaireForm({
     enabled: !!continueDraftId,
   });
 
-  const { mutate: submitBatch, isPending: isSubmitPending } = useMutation({
-    mutationFn: mutate(batchApi.batchRequest, { silent: true }),
+  const { mutate: submitBatch, isPending: isSubmitPending } = useBatchRequest({
+    silent: true,
     onSuccess: () => {
       setServerErrors(undefined);
       toast.success(t("questionnaire_submitted_successfully"));
@@ -937,7 +938,17 @@ export function QuestionnaireForm({
     }
 
     setIsDirty(false);
-    submitBatch({ requests });
+    submitBatch(
+      requests.map((request) => ({
+        api: {
+          path: request.url,
+          method: request.method as HttpMethod,
+          TRes: Type<unknown>(),
+        },
+        body: request.body,
+        referenceId: request.reference_id,
+      })),
+    );
   };
 
   const scrollToQuestion = (questionnaireId: string, groupId?: string) => {
