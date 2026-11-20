@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import {
   buildHandoffUrl,
   hasReturnParams,
+  readError,
   readReturn,
   stripReturnParams,
 } from "../src/handoff.ts";
@@ -11,6 +12,7 @@ import {
 const SCRIBE = "http://localhost:8000";
 const params = {
   encounterId: "enc-1",
+  hfrId: "IN2410013685",
   title: "Ravi Kumar · Outpatient",
   attendees: "Ravi Kumar (patient), Asha Rao",
   languageHint: "en,hi",
@@ -31,6 +33,7 @@ describe("buildHandoffUrl", () => {
       language_hint: "en,hi",
       templates: "tmpl-1",
       encounter_id: "enc-1",
+      hfr_id: "IN2410013685",
       public_key: params.publicKey,
     });
   });
@@ -61,6 +64,26 @@ describe("readReturn", () => {
   });
 });
 
+describe("readError", () => {
+  it("reads the scribe's error and its description", () => {
+    assert.deepEqual(
+      readError("?error=facility_not_authorised&error_description=No%20HFR"),
+      { code: "facility_not_authorised", description: "No HFR" },
+    );
+  });
+
+  it("returns an empty description when none is sent", () => {
+    assert.deepEqual(readError("?error=facility_not_authorised"), {
+      code: "facility_not_authorised",
+      description: "",
+    });
+  });
+
+  it("is undefined when the scribe sent notes", () => {
+    assert.equal(readError("?doc_url=x&session_id=s"), undefined);
+  });
+});
+
 describe("hasReturnParams", () => {
   it("is true when the scribe sent anything back, even a foreign doc_url", () => {
     assert.equal(
@@ -68,6 +91,7 @@ describe("hasReturnParams", () => {
       true,
     );
     assert.equal(hasReturnParams("?session_id=s-1"), true);
+    assert.equal(hasReturnParams("?error=facility_not_authorised"), true);
   });
 
   it("is false for a plain reload of the return page", () => {
@@ -80,7 +104,7 @@ describe("stripReturnParams", () => {
   it("removes the scribe's params and keeps the page's own", () => {
     assert.equal(
       stripReturnParams(
-        "http://h/p?tab=1&doc_url=x&document_id=d&session_id=s",
+        "http://h/p?tab=1&doc_url=x&document_id=d&session_id=s&error=e&error_description=d",
       ),
       "http://h/p?tab=1",
     );

@@ -13,7 +13,7 @@ A [CARE](https://github.com/ohcnetwork/care_fe) app that sends an encounter to a
 
 ## Setup in CARE
 
-1. **Install care_scribe** on the CARE backend, with its FHIR endpoint.
+1. **Install care_scribe** on the CARE backend, with its FHIR endpoint, and set each facility's HFR ID with its `set_facility_hfr_id` command. The widget sends it as `hfr_id` and stays disabled until it is set; the scribe refuses a handoff without one.
 2. **Enable the app.** Build it (below) and host `dist/`. Then either add it as a plug config in CARE's admin, or set `REACT_ENABLED_APPS=eka-care/care_vaarta@<host>/assets/remoteEntry.js` in CARE's env.
 3. **Allow CARE in the scribe.** Add CARE's origin to the scribe's `PARTNER_CALLBACK_ORIGINS`.
 
