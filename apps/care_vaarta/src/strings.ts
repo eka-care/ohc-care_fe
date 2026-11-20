@@ -5,6 +5,11 @@ export const strings = {
   language: "Language",
   template: "Template",
   start: "Start",
+  hfrIdMissing:
+    "Vaarta needs this facility's HFR ID, and none is set. Ask your administrator to add it.",
+  hfrIdLoadFailed:
+    "Couldn't check this facility's HFR ID. Reload to try again.",
+  scribeRefused: "Vaarta didn't start the session.",
   handoffFailed: "Couldn't start Vaarta. Try again.",
   noDocUrl: "Vaarta didn't send a note to open.",
   keyMissing:

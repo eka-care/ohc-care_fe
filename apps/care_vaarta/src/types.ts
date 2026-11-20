@@ -18,3 +18,11 @@ export interface Encounter {
   patient: { id: string; name: string };
   care_team: CareTeamMember[];
 }
+
+// care_scribe's facility extension; the scribe needs the HFR ID to start a session.
+export const FACILITY_EXTENSION = "care_scribe__facility";
+
+export interface Facility {
+  id: string;
+  extensions?: { [FACILITY_EXTENSION]?: { hfr_id?: string } };
+}

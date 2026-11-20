@@ -1,10 +1,19 @@
 // Builds the redirect to the scribe and reads what it appends on publish.
 const DOC_URL_PARAM = "doc_url";
 const SESSION_ID_PARAM = "session_id";
-const RETURN_PARAMS = [DOC_URL_PARAM, "document_id", SESSION_ID_PARAM];
+const ERROR_PARAM = "error";
+const ERROR_DESCRIPTION_PARAM = "error_description";
+const RETURN_PARAMS = [
+  DOC_URL_PARAM,
+  "document_id",
+  SESSION_ID_PARAM,
+  ERROR_PARAM,
+  ERROR_DESCRIPTION_PARAM,
+];
 
 export interface HandoffParams {
   encounterId: string;
+  hfrId: string;
   title: string;
   attendees: string;
   languageHint: string;
@@ -23,6 +32,7 @@ export function buildHandoffUrl(baseUrl: string, p: HandoffParams): string {
     language_hint: p.languageHint,
     templates: p.templates,
     encounter_id: p.encounterId,
+    hfr_id: p.hfrId,
     public_key: p.publicKey,
   }).toString();
   return url.toString();
@@ -31,6 +41,11 @@ export function buildHandoffUrl(baseUrl: string, p: HandoffParams): string {
 export interface ScribeReturn {
   docUrls: string[];
   sessionId: string;
+}
+
+export interface ScribeError {
+  code: string;
+  description: string;
 }
 
 // Only urls on the scribe's own origin are fetched, never arbitrary ones from the query string.
@@ -44,6 +59,14 @@ export function readReturn(search: string, scribeOrigin: string): ScribeReturn {
     }
   });
   return { docUrls, sessionId: params.get(SESSION_ID_PARAM) ?? "" };
+}
+
+// The scribe refuses a handoff by sending the tab back with error instead of doc_url.
+export function readError(search: string): ScribeError | undefined {
+  const params = new URLSearchParams(search);
+  const code = params.get(ERROR_PARAM);
+  if (!code) return undefined;
+  return { code, description: params.get(ERROR_DESCRIPTION_PARAM) ?? "" };
 }
 
 // A reload of the return page carries none of these; a fresh callback carries at least one.

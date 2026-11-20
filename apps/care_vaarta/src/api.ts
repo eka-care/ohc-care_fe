@@ -1,3 +1,5 @@
+import { Facility } from "@/types";
+
 export class CareApiError extends Error {
   constructor(
     message: string,
@@ -24,6 +26,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const careApi = {
+  getFacility: (facilityId: string) =>
+    request<Facility>(`/api/v1/facility/${facilityId}/`),
   fileScribeFhir: (
     encounterId: string,
     body: { bundle: unknown; session_id: string },

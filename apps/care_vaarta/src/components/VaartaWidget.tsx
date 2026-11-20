@@ -4,6 +4,7 @@ import { config } from "@/config";
 import { createPublicKey } from "@/crypto";
 import { encounterClassLabel, isActiveEncounter } from "@/encounter";
 import { buildHandoffUrl } from "@/handoff";
+import { HfrIdState, useFacilityHfrId } from "@/hooks/useFacilityHfrId";
 import { LANGUAGES, TEMPLATES } from "@/scribeOptions";
 import { strings } from "@/strings";
 import { Encounter } from "@/types";
@@ -14,6 +15,11 @@ interface Props {
   encounterId: string;
 }
 
+const HFR_ID_MESSAGES: Partial<Record<HfrIdState["status"], string>> = {
+  missing: strings.hfrIdMissing,
+  failed: strings.hfrIdLoadFailed,
+};
+
 const SELECT_CLASS =
   "min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm";
 
@@ -22,11 +28,13 @@ export default function VaartaWidget({ encounter }: Props) {
   const [template, setTemplate] = useState(TEMPLATES[0].id);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState("");
+  const hfr = useFacilityHfrId(encounter.facility.id);
 
   if (!isActiveEncounter(encounter.status)) return null;
 
   // Same tab: Vaarta sends this tab back to callback_url on publish, so the doctor ends where they began.
   const start = async () => {
+    if (hfr.status !== "ready") return;
     setStarting(true);
     setError("");
     try {
@@ -34,6 +42,7 @@ export default function VaartaWidget({ encounter }: Props) {
       window.location.assign(
         buildHandoffUrl(config.vaartaUrl, {
           encounterId: encounter.id,
+          hfrId: hfr.hfrId,
           title: `${encounter.patient.name} · ${encounterClassLabel(encounter.encounter_class)}`,
           attendees: [
             `${encounter.patient.name} (patient)`,
@@ -93,13 +102,18 @@ export default function VaartaWidget({ encounter }: Props) {
             </label>
             <button
               type="button"
-              disabled={starting}
+              disabled={starting || hfr.status !== "ready"}
               className="rounded-md bg-primary-700 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
               onClick={start}
             >
               {strings.start}
             </button>
           </div>
+          {HFR_ID_MESSAGES[hfr.status] && (
+            <p className="text-sm text-amber-700">
+              {HFR_ID_MESSAGES[hfr.status]}
+            </p>
+          )}
           {error && <p className="text-sm text-red-600">{error}</p>}
         </div>
       </div>

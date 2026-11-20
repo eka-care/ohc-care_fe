@@ -8,6 +8,7 @@ import { fileScribeNotes } from "@/fileNotes";
 import {
   ScribeReturn,
   hasReturnParams,
+  readError,
   readReturn,
   stripReturnParams,
 } from "@/handoff";
@@ -74,6 +75,13 @@ export function VaartaReturnPage({
       "",
       stripReturnParams(window.location.href),
     );
+    const scribeError = readError(search);
+    if (scribeError) {
+      console.error("vaarta refused the handoff", scribeError.code);
+      clearPendingReturn(sessionStorage, encounterId);
+      setError(scribeError.description || strings.scribeRefused);
+      return;
+    }
     // Only a plain reload falls back to what was stored; a fresh callback is judged on its own params.
     let toFile = loadPendingReturn(sessionStorage, encounterId);
     if (hasReturnParams(search)) {
