@@ -1,3 +1,4 @@
+import careConfig from "@careConfig";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import dayjs from "dayjs";
@@ -16,7 +17,6 @@ import WeekdayCheckbox, {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { DatePicker } from "@/components/ui/date-picker";
 import {
   Form,
   FormControl,
@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Sheet,
+  SheetBody,
   SheetContent,
   SheetDescription,
   SheetHeader,
@@ -46,6 +47,7 @@ import { Time } from "@/Utils/types";
 import { dateQueryString } from "@/Utils/utils";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScheduleEncounterDefaultsFields } from "@/pages/Scheduling/components/ScheduleEncounterDefaultsFields";
+import { ScheduleValidityField } from "@/pages/Scheduling/components/ScheduleValidityField";
 import {
   calculateSlotDuration,
   formatAvailabilityTime,
@@ -86,14 +88,14 @@ export default function EditScheduleTemplateSheet({
       <SheetTrigger asChild>
         {trigger || <Button variant="outline" size="sm"></Button>}
       </SheetTrigger>
-      <SheetContent className="flex min-w-full flex-col bg-gray-100 sm:min-w-128">
+      <SheetContent size="lg" className="overflow-hidden">
         <SheetHeader>
           <SheetTitle>{t("edit_schedule_template")}</SheetTitle>
           <SheetDescription className="sr-only">
             {t("edit_schedule_template")}
           </SheetDescription>
         </SheetHeader>
-        <div className="overflow-auto -mx-6 px-6 pb-16">
+        <SheetBody className="bg-muted-background">
           <ScheduleTemplateEditor
             template={template}
             facilityId={facilityId}
@@ -130,7 +132,7 @@ export default function EditScheduleTemplateSheet({
             resourceType={resourceType}
             resourceId={resourceId}
           />
-        </div>
+        </SheetBody>
       </SheetContent>
     </Sheet>
   );
@@ -151,7 +153,7 @@ const ScheduleTemplateEditor = ({
   const queryClient = useQueryClient();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
-  // The list response omits the encounter defaults; only the detail has them.
+  // Only the detail has the saved departments and care team.
   // The key nests under the list's so saving refreshes both.
   const { data: templateDetail } = useQuery({
     queryKey: [
@@ -165,10 +167,18 @@ const ScheduleTemplateEditor = ({
   });
   const savedOrganizations = templateDetail?.organizations ?? [];
   const savedCareTeam = templateDetail?.care_team ?? [];
+  const savedEncounterType =
+    (templateDetail ?? template).encounter_type ?? null;
+  // Keep the stored option available so an unsaved change can be undone.
+  const encounterTypeOptions =
+    savedEncounterType &&
+    !careConfig.encounterClasses.includes(savedEncounterType)
+      ? [...careConfig.encounterClasses, savedEncounterType]
+      : careConfig.encounterClasses;
 
   const templateFormSchema = z
     .object({
-      name: z.string().min(1, t("field_required")),
+      name: z.string().trim().min(1, t("field_required")),
       valid_from: z.date({
         error: t("field_required"),
       }),
@@ -176,6 +186,7 @@ const ScheduleTemplateEditor = ({
         error: t("field_required"),
       }),
       is_public: z.boolean(),
+      encounter_type: z.enum(encounterTypeOptions).nullable(),
       organizations: z.array(z.string()),
       care_team: z.array(z.custom<CareTeamResponse>()),
     })
@@ -194,6 +205,7 @@ const ScheduleTemplateEditor = ({
       valid_from: new Date(template.valid_from),
       valid_to: new Date(template.valid_to),
       is_public: template.is_public,
+      encounter_type: template.encounter_type ?? null,
       organizations: [],
       care_team: [],
     },
@@ -202,14 +214,15 @@ const ScheduleTemplateEditor = ({
       valid_from: new Date(templateDetail.valid_from),
       valid_to: new Date(templateDetail.valid_to),
       is_public: templateDetail.is_public,
+      encounter_type: savedEncounterType,
       organizations: savedOrganizations.map(({ id }) => id),
       care_team: savedCareTeam,
     },
     resetOptions: { keepDirtyValues: true },
   });
-  const [organizations, careTeam] = useWatch({
+  const [encounterType, organizations, careTeam] = useWatch({
     control: form.control,
-    name: ["organizations", "care_team"],
+    name: ["encounter_type", "organizations", "care_team"],
   });
 
   const { mutate: updateTemplate, isPending: isUpdating } = useMutation({
@@ -248,11 +261,19 @@ const ScheduleTemplateEditor = ({
     const careTeamChanged =
       JSON.stringify(careTeamMembers) !==
       JSON.stringify(toCareTeamMembers(savedCareTeam));
+    // Omission preserves the server value; an explicit null clears it.
+    const encounterTypeChanged =
+      templateDetail &&
+      form.getFieldState("encounter_type").isDirty &&
+      values.encounter_type !== savedEncounterType;
     updateTemplate({
       name: values.name,
       valid_from: dateQueryString(values.valid_from),
       valid_to: dateQueryString(values.valid_to),
       is_public: values.is_public,
+      ...(encounterTypeChanged && {
+        encounter_type: values.encounter_type,
+      }),
       ...(organizationsChanged && { organizations: values.organizations }),
       ...(careTeamChanged && { care_team: careTeamMembers }),
     });
@@ -281,37 +302,7 @@ const ScheduleTemplateEditor = ({
             )}
           />
 
-          <div className="grid md:grid-cols-2 gap-4">
-            <FormField
-              control={form.control}
-              name="valid_from"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel aria-required>{t("valid_from")}</FormLabel>
-                  <DatePicker
-                    date={field.value}
-                    onChange={(date) => field.onChange(date)}
-                  />
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="valid_to"
-              render={({ field }) => (
-                <FormItem className="flex flex-col">
-                  <FormLabel aria-required>{t("valid_to")}</FormLabel>
-                  <DatePicker
-                    date={field.value}
-                    onChange={(date) => field.onChange(date)}
-                  />
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+          <ScheduleValidityField />
 
           <FormField
             control={form.control}
@@ -351,6 +342,11 @@ const ScheduleTemplateEditor = ({
 
           <ScheduleEncounterDefaultsFields
             facilityId={facilityId}
+            encounterType={encounterType}
+            encounterTypeOptions={encounterTypeOptions}
+            onEncounterTypeChange={(value) =>
+              form.setValue("encounter_type", value, { shouldDirty: true })
+            }
             organizations={organizations}
             onOrganizationsChange={(value) =>
               form.setValue("organizations", value, { shouldDirty: true })
@@ -622,7 +618,7 @@ const NewAvailabilityCard = ({
 
   const formSchema = z
     .object({
-      name: z.string().min(1, t("field_required")),
+      name: z.string().trim().min(1, t("field_required")),
       slot_type: z.enum(["appointment", "open", "closed"]),
       start_time: z.string().min(1, t("field_required")) as z.ZodType<
         Time | undefined,
@@ -632,14 +628,20 @@ const NewAvailabilityCard = ({
         Time | undefined,
         Time | undefined
       >,
-      slot_size_in_minutes: z.number().nullable(),
+      slot_size_in_minutes: z
+        .number()
+        .min(1, t("number_min_error", { min: 1 }))
+        .nullable()
+        .refine((val) => val !== null, {
+          message: t("field_required"),
+        }),
       tokens_per_slot: z.number().nullable(),
       reason: z.string().trim(),
       weekdays: z
         .array(z.number() as unknown as z.ZodType<DayOfWeek, DayOfWeek>)
         .min(1, t("schedule_weekdays_min_error")),
       is_auto_fill: z.boolean().optional(),
-      num_of_slots: z.number().min(1, t("number_min_error", { min: 0 })),
+      num_of_slots: z.number().nullable(),
     })
     .refine(
       (data) => {
@@ -653,7 +655,24 @@ const NewAvailabilityCard = ({
         message: t("start_time_must_be_before_end_time"),
         path: ["start_time"], // This will show the error on the start_time field
       },
-    );
+    )
+    .superRefine((data, ctx) => {
+      // The slot count only drives auto-fill, so skip it when auto-fill is off
+      if (!data.is_auto_fill) return;
+      if (data.num_of_slots === null) {
+        ctx.addIssue({
+          code: "custom",
+          message: t("field_required"),
+          path: ["num_of_slots"],
+        });
+      } else if (data.num_of_slots < 1) {
+        ctx.addIssue({
+          code: "custom",
+          message: t("number_min_error", { min: 1 }),
+          path: ["num_of_slots"],
+        });
+      }
+    });
 
   const form = useForm({
     resolver: zodResolver(formSchema),
@@ -769,9 +788,12 @@ const NewAvailabilityCard = ({
       const start = form.watch("start_time");
       const end = form.watch("end_time");
       const numOfSlots = form.watch("num_of_slots");
-      if (!start || !end) return;
+      if (!start || !end || !numOfSlots) {
+        form.setValue("slot_size_in_minutes", null);
+        return;
+      }
       const duration = calculateSlotDuration(start, end, numOfSlots);
-      form.setValue("slot_size_in_minutes", duration);
+      form.setValue("slot_size_in_minutes", duration, { shouldValidate: true });
     }
   };
 
@@ -918,11 +940,12 @@ const NewAvailabilityCard = ({
                                 inputMode="numeric"
                                 pattern="[0-9]*"
                                 min={1}
-                                defaultValue={1}
                                 {...field}
+                                value={field.value ?? ""}
                                 className="shadow-none"
                                 onChange={(e) => {
-                                  field.onChange(e.target.valueAsNumber);
+                                  const value = e.target.valueAsNumber;
+                                  field.onChange(isNaN(value) ? null : value);
                                   updateSlotDuration();
                                 }}
                               />
@@ -953,9 +976,10 @@ const NewAvailabilityCard = ({
                           placeholder="e.g. 10"
                           {...field}
                           value={field.value ?? ""}
-                          onChange={(e) =>
-                            field.onChange(e.target.valueAsNumber)
-                          }
+                          onChange={(e) => {
+                            const value = e.target.valueAsNumber;
+                            field.onChange(isNaN(value) ? null : value);
+                          }}
                           disabled={form.watch("is_auto_fill")}
                         />
                       </FormControl>

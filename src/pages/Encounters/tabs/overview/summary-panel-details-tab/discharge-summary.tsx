@@ -1,6 +1,6 @@
+import { Link } from "@tanstack/react-router";
 import { format } from "date-fns";
 import { NotepadText, SquarePen } from "lucide-react";
-import { Link, useFullPath } from "raviger";
 import { useTranslation } from "react-i18next";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,13 +19,15 @@ import { useEncounter } from "@/pages/Encounters/utils/EncounterProvider";
 
 import { SummaryPanelEmptyState as EmptyState } from "./empty-state";
 
+import { usePathname } from "@/lib/router/location";
+
 interface DischargeDetailsProps {
   title?: string;
 }
 
 export const DischargeDetails = ({ title }: DischargeDetailsProps = {}) => {
   const { t } = useTranslation();
-  const returnPage = useFullPath().split("/").pop() ?? "updates";
+  const returnPage = usePathname().split("/").pop() ?? "updates";
   const { selectedEncounter: encounter, canWriteSelectedEncounter } =
     useEncounter();
 
@@ -34,6 +36,7 @@ export const DischargeDetails = ({ title }: DischargeDetailsProps = {}) => {
   const dischargeStatus = encounter.status_history.history.find(
     (status) => status.status === "discharged",
   );
+  const disposition = encounter.hospitalization?.discharge_disposition;
 
   return (
     <section
@@ -47,7 +50,14 @@ export const DischargeDetails = ({ title }: DischargeDetailsProps = {}) => {
         {canWriteSelectedEncounter && (
           <Button variant="ghost" size="sm" className="shrink-0" asChild>
             <Link
-              href={`/facility/${encounter.facility.id}/patient/${encounter.patient.id}/encounter/${encounter.id}/questionnaire/encounter?${new URLSearchParams({ return_page: returnPage })}`}
+              to="/facility/$facilityId/patient/$patientId/encounter/$encounterId/questionnaire/$questionnaireId"
+              params={{
+                facilityId: encounter.facility.id,
+                patientId: encounter.patient.id,
+                encounterId: encounter.id,
+                questionnaireId: "encounter",
+              }}
+              search={{ return_page: returnPage }}
               aria-label={t("edit")}
             >
               <SquarePen
@@ -80,6 +90,16 @@ export const DischargeDetails = ({ title }: DischargeDetailsProps = {}) => {
               )}
               <Badge variant="green">{t("discharged")}</Badge>
             </div>
+            {disposition && (
+              <div className="flex flex-wrap gap-x-1 text-xs">
+                <span className="text-gray-700">
+                  {t("discharge_disposition")}:
+                </span>
+                <span className="font-semibold text-gray-950">
+                  {t(`encounter_discharge_disposition__${disposition}`)}
+                </span>
+              </div>
+            )}
             <Dialog>
               <DialogTrigger asChild>
                 <Button

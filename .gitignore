@@ -32,7 +32,6 @@ stats.json
 public/build-meta.json
 .vscode/*
 !.vscode/launch.json
-src/supportedBrowsers.ts
 
 # Reason React
 /lib/bs/**
@@ -75,3 +74,6 @@ public/_headers
 
 namespaceMapping.json
 dump.rdb
+
+# Local migration codemods (not shared)
+/scripts/codemods/

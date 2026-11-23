@@ -111,11 +111,9 @@ export function EncounterVitalsWidget({
   );
 }
 
-// The analysis endpoint returns the most recently modified readings per code,
-// so one request fills the matrix regardless of how often other vitals were
-// charted. The status and encounter filters narrow its bounded slice when the
-// backend applies list filters; buildMatrix re-applies both because deployed
-// backends may ignore them. Extra rows leave room for back-dated entries.
+// Fetch per code so frequently recorded vitals don't crowd out others.
+// Fetch extra readings because the API sorts by last update time,
+// while the table sorts by measurement time.
 const READINGS_PER_CODE = 8;
 const VISIBLE_READINGS = 4;
 const VALID_READING_STATUSES = Object.values(ObservationStatus)
@@ -213,11 +211,7 @@ function rangeText(observation: ObservationListRead) {
   return normalRangeText(observation.reference_range);
 }
 
-function buildMatrix(
-  groups: ObservationAnalyzeGroup[],
-  specs: VitalRowSpec[],
-  encounterId?: string,
-) {
+function buildMatrix(groups: ObservationAnalyzeGroup[], specs: VitalRowSpec[]) {
   const columns = new Map<number, VitalColumn>();
   const rows: VitalRow[] = specs.map(({ code, codes }) => {
     const keys = new Set(codes.map(vitalCodeKey));
@@ -226,8 +220,7 @@ function buildMatrix(
       .flatMap((group) => group.results)
       .filter(
         (observation) =>
-          observation.status !== ObservationStatus.ENTERED_IN_ERROR &&
-          (!encounterId || observation.encounter === encounterId),
+          observation.status !== ObservationStatus.ENTERED_IN_ERROR,
       )
       .sort(
         (a, b) =>
@@ -281,6 +274,7 @@ function VitalsPanel({
         title={title}
         readOnly
         presentation="panel"
+        className="overflow-hidden"
         actionButton={actions}
       >
         {children}
@@ -333,8 +327,8 @@ function VitalsMatrix({
     enabled: codes.length > 0,
   });
   const { rows, columns } = useMemo(
-    () => buildMatrix(data?.results ?? [], specs, encounterId),
-    [specs, data?.results, encounterId],
+    () => buildMatrix(data?.results ?? [], specs),
+    [specs, data?.results],
   );
   const visibleColumns = columns.slice(0, VISIBLE_READINGS);
   const isAbnormal = (row: VitalRow) =>
@@ -413,7 +407,7 @@ function VitalsMatrix({
             tabIndex={0}
             className="min-w-0 max-w-full overflow-x-auto focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <table className="min-w-max border-separate border-spacing-0 text-sm">
+            <table className="w-full min-w-max border-separate border-spacing-0 text-sm">
               <caption className="sr-only">{title}</caption>
               <thead>
                 <tr>
@@ -496,6 +490,7 @@ function VitalsMatrix({
                       <VitalMatrixCell
                         key={column.key}
                         cell={row.cells.get(column.key)}
+                        rowUnit={row.unit}
                         latest={index === 0}
                       />
                     ))}
@@ -530,9 +525,11 @@ const FLAG_ICONS = {
 
 function VitalMatrixCell({
   cell,
+  rowUnit,
   latest,
 }: {
   cell?: VitalCell;
+  rowUnit?: string;
   latest: boolean;
 }) {
   const { t } = useTranslation();
@@ -545,7 +542,7 @@ function VitalMatrixCell({
         )}
         aria-label={t("workspace_vitals_no_reading")}
       >
-        {t("workspace_vitals_no_reading")}
+        -
       </td>
     );
   }
@@ -573,7 +570,7 @@ function VitalMatrixCell({
     >
       <span className="inline-flex items-center justify-end gap-1">
         {cell.text}
-        {cell.unit && (
+        {cell.unit && cell.unit !== rowUnit && (
           <span className="whitespace-pre text-xs text-placeholder-foreground">
             {" "}
             {cell.unit}

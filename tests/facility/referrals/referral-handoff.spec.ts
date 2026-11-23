@@ -9,6 +9,10 @@ import {
   type Page,
   type TestInfo,
 } from "@playwright/test";
+import {
+  departmentCards,
+  selectDepartment,
+} from "tests/helper/departmentSelect";
 import { createQuestionnaireEncounter } from "tests/helper/questionnaire";
 import {
   adminApiHeaders,
@@ -355,7 +359,7 @@ async function completeReferralHandoff(
           `/facility/${sourceFacilityId}/patient/${patientId}/encounter/${encounterId}/referrals`,
         );
         await senderPage
-          .getByRole("button", { name: "New referral", exact: true })
+          .getByRole("button", { name: "New Referral", exact: true })
           .click();
         const creation = senderPage.getByRole("dialog", {
           name: "Request form",
@@ -820,18 +824,12 @@ async function completeReferralHandoff(
       await encounterForm
         .getByRole("button", { name: /^Ambulatory Patient visits/ })
         .click();
-      await encounterForm
-        .getByRole("combobox", { name: "Select Department", exact: true })
-        .click();
-      await recipientPage
-        .getByRole("option", { name: department.name, exact: true })
-        .click();
+      await selectDepartment(recipientPage, encounterForm, department.name, {
+        multiple: true,
+      });
       await expect(
-        encounterForm.getByRole("combobox", {
-          name: "Select Department",
-          exact: true,
-        }),
-      ).toContainText(department.name);
+        departmentCards(encounterForm).filter({ hasText: department.name }),
+      ).toHaveCount(1);
       const created = recipientPage.waitForResponse(
         (result) =>
           new URL(result.url()).pathname === "/api/v1/encounter/" &&

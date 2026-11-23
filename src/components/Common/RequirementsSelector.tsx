@@ -19,7 +19,12 @@ import {
   CommandItem,
   CommandList,
 } from "@/components/ui/command";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetBody,
+  SheetContent,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 
 import { FormSkeleton } from "@/components/Common/SkeletonLoading";
 import {
@@ -36,8 +41,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import useBreakpoints from "@/hooks/useBreakpoints";
+import { HrefLink } from "@/lib/router/HrefLink";
 import { cn } from "@/lib/utils";
-import { Link } from "raviger";
 
 type RequirementItem = {
   value: string;
@@ -82,9 +87,9 @@ function SelectedItemCard({
         <div className="flex items-center gap-1">
           <p className="my-px font-medium text-sm text-gray-900">{title}</p>
           {link && (
-            <Link href={link} basePath="/" className="text-gray-900">
+            <HrefLink href={link} className="text-gray-900">
               <ExternalLinkIcon className="size-3" />
-            </Link>
+            </HrefLink>
           )}
         </div>
         {details.length > 0 && (
@@ -202,16 +207,13 @@ function RequirementsContent({
                 {t("create_new")}
               </Button>
             </SheetTrigger>
-            <SheetContent
-              side="right"
-              className="flex h-full w-full flex-col overflow-y-auto md:max-w-[600px] lg:max-w-[800px]"
-            >
-              <div className="flex-1 overflow-y-auto py-6">
+            <SheetContent size="lg" showCloseButton>
+              <SheetBody className="py-0">
                 {createForm?.(
                   () => setIsCreateSheetOpen(false),
                   () => setIsCreateSheetOpen(false),
                 )}
-              </div>
+              </SheetBody>
             </SheetContent>
           </Sheet>
         </div>

@@ -1,5 +1,4 @@
-import { Activity, ArrowRight, MoreHorizontal } from "lucide-react";
-import { Link, navigate, usePath } from "raviger";
+import { ArrowRight, MoreHorizontal } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -21,6 +20,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useAppSidebar } from "@/components/ui/sidebar/app-sidebar-provider";
+import { FacilitySidebarIcon } from "@/components/ui/sidebar/facility/facility-sidebar-icon";
 import { NavLink } from "@/components/ui/sidebar/nav-main";
 import { isNavigationActive } from "@/components/ui/sidebar/nav-utils";
 
@@ -29,6 +29,9 @@ import {
   EncounterListClass,
   useDefaultEncounterClass,
 } from "@/hooks/useDefaultEncounterClass";
+import { HrefLink } from "@/lib/router/HrefLink";
+import { usePathname } from "@/lib/router/location";
+import { navigate } from "@/lib/router/navigate";
 
 import careConfig from "@careConfig";
 
@@ -44,7 +47,7 @@ const ROUTABLE_LIST_CLASSES: EncounterListClass[] = [
  */
 export function EncounterNavItem({ facilityId }: { facilityId: string }) {
   const { t } = useTranslation();
-  const path = usePath();
+  const path = usePathname();
   const { isMobile, setOpenMobile } = useSidebar();
   const { handleMenuOpenChange } = useAppSidebar();
   const { defaultClass, setDefaultClass, isSaving } =
@@ -70,7 +73,7 @@ export function EncounterNavItem({ facilityId }: { facilityId: string }) {
   // Runs per item, not on value change, so the current default opens too.
   const chooseDefault = (encounterClass: EncounterListClass) => {
     if (encounterClass !== defaultClass) setDefaultClass(encounterClass);
-    navigate(listUrl(encounterClass));
+    navigate({ href: listUrl(encounterClass) });
     closeMobileSidebar();
   };
 
@@ -87,7 +90,7 @@ export function EncounterNavItem({ facilityId }: { facilityId: string }) {
           ariaLabel={listName(current)}
           isActive={!!viewing}
         >
-          <Activity />
+          <FacilitySidebarIcon name="encounters" />
           <span title={listName(current)}>{listName(current)}</span>
         </NavLink>
       </SidebarMenuButton>
@@ -137,12 +140,12 @@ export function EncounterNavItem({ facilityId }: { facilityId: string }) {
                   <DropdownMenuLabel>{t("encounter_types")}</DropdownMenuLabel>
                   {ENCOUNTER_LIST_CLASSES.map((encounterClass) => (
                     <DropdownMenuItem key={encounterClass} asChild>
-                      <Link
+                      <HrefLink
                         href={listUrl(encounterClass)}
                         onClick={closeMobileSidebar}
                       >
                         {listName(encounterClass)}
-                      </Link>
+                      </HrefLink>
                     </DropdownMenuItem>
                   ))}
                 </DropdownMenuGroup>

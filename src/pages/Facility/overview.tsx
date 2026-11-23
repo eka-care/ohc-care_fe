@@ -1,6 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
 import { ArrowUpRight, RotateCcw, Wrench, X } from "lucide-react";
-import { Link } from "raviger";
 import { Trans, useTranslation } from "react-i18next";
 
 import { Button } from "@/components/ui/button";
@@ -38,6 +37,7 @@ import {
 import query from "@/Utils/request/query";
 import { formatName } from "@/Utils/utils";
 import { usePermissions } from "@/context/PermissionContext";
+import { HrefLink } from "@/lib/router/HrefLink";
 import facilityApi from "@/types/facility/facilityApi";
 import careConfig from "@careConfig";
 
@@ -57,7 +57,7 @@ export function FacilityOverview({ facilityId }: FacilityOverviewProps) {
         : "overview_greeting_evening";
   const { hasPermission } = usePermissions();
   const { customLinks, resetCustomLinks, removeCustomLink } =
-    useUserPreferences();
+    useUserPreferences({ facilityId });
   const { defaultClass: defaultEncounterClass } = useDefaultEncounterClass();
 
   const { data: facilityData } = useQuery({
@@ -123,22 +123,18 @@ export function FacilityOverview({ facilityId }: FacilityOverviewProps) {
 
   // Combine default and custom dashboard links
   const shortcuts = [...defaultShortcuts, ...customDashboardLinks];
-  // Filter pinned links for this facility (or show all if no facilityId specified)
-  const pinnedLinks = customLinks.filter(
-    (link) => !link.facilityId || link.facilityId === facilityId,
-  );
 
   return (
     <Page
       title={t("overview")}
       hideTitleOnPage
-      className="md:px-0 max-w-5xl xl:max-w-10/12 mx-auto"
+      className="flex max-w-5xl xl:max-w-10/12 mx-auto w-full"
     >
-      <div className="space-y-8">
+      <div className="space-y-8 flex-1">
         {/* Welcome Header */}
         <div
           data-cy="facility-overview-greeting"
-          className="relative overflow-hidden rounded-xl border border-inverse-border shadow-inner bg-linear-to-r from-sky-50 to-emerald-100 text-foreground"
+          className="relative overflow-hidden rounded-xl border border-inverse-border inset-shadow-sm bg-linear-to-r from-sky-50 to-emerald-100 text-foreground"
         >
           <img
             src="/images/home-banner.svg"
@@ -176,7 +172,7 @@ export function FacilityOverview({ facilityId }: FacilityOverviewProps) {
             {shortcuts
               .filter((shortcut) => shortcut.visible)
               .map((shortcut) => (
-                <Link
+                <HrefLink
                   key={shortcut.href}
                   href={shortcut.href}
                   className="block h-full min-w-0 rounded-lg ring-primary-400 ring-offset-2 transition-all duration-200 hover:ring hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
@@ -202,13 +198,13 @@ export function FacilityOverview({ facilityId }: FacilityOverviewProps) {
                       </div>
                     </CardContent>
                   </Card>
-                </Link>
+                </HrefLink>
               ))}
           </div>
         </div>
 
         {/* Pinned Links Section */}
-        {pinnedLinks.length > 0 && (
+        {customLinks.length > 0 && (
           <div className="group/pinned-links">
             <div className="flex items-center justify-between">
               <h2 className="text-base/9 font-semibold text-foreground">
@@ -226,7 +222,7 @@ export function FacilityOverview({ facilityId }: FacilityOverviewProps) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem onClick={resetCustomLinks}>
+                  <DropdownMenuItem onClick={() => resetCustomLinks()}>
                     <RotateCcw className="size-4" />
                     {t("reset_pinned_links")}
                   </DropdownMenuItem>
@@ -234,7 +230,7 @@ export function FacilityOverview({ facilityId }: FacilityOverviewProps) {
               </DropdownMenu>
             </div>
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {pinnedLinks.map((link) => (
+              {customLinks.map((link) => (
                 <div key={link.link} className="relative group block h-full">
                   <Button
                     variant="ghost"
@@ -245,7 +241,7 @@ export function FacilityOverview({ facilityId }: FacilityOverviewProps) {
                   >
                     <X className="size-4" />
                   </Button>
-                  <Link
+                  <HrefLink
                     href={link.link}
                     className="block h-full rounded-xl ring-primary-400 ring-offset-2 transition-all duration-200 hover:ring-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-400 focus-visible:ring-offset-2"
                   >
@@ -264,7 +260,7 @@ export function FacilityOverview({ facilityId }: FacilityOverviewProps) {
                         <ArrowUpRight className="size-4 shrink-0 text-muted-foreground" />
                       </CardContent>
                     </Card>
-                  </Link>
+                  </HrefLink>
                 </div>
               ))}
             </div>

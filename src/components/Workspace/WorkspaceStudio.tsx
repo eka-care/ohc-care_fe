@@ -661,7 +661,7 @@ export function WorkspaceStudio({
               );
             })}
           </div>
-          <p className="min-w-0 flex-1 text-xs leading-relaxed text-soft-foreground">
+          <p className="min-w-0 flex-[1_1_16rem] text-xs leading-relaxed text-soft-foreground">
             {t(`workspace_studio_surface_${surface}_hint`)}
           </p>
         </div>
@@ -787,7 +787,7 @@ export function WorkspaceStudio({
             </div>
             <nav
               aria-label={t("workspace_studio_tabs")}
-              className="flex gap-1 overflow-x-auto px-2 pb-2 lg:flex-col lg:overflow-visible"
+              className="mb-2 flex gap-1 overflow-x-auto px-2 pb-2 lg:mb-0 lg:flex-col lg:overflow-visible"
             >
               {pages.map((item) => {
                 const Icon = tabIcon(item);

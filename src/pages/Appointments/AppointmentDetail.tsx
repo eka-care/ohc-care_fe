@@ -13,7 +13,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DropdownMenu,
@@ -25,7 +25,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 import {
   Sheet,
+  SheetBody,
   SheetContent,
+  SheetFooter,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -77,7 +79,6 @@ import {
   Wallet,
   X,
 } from "lucide-react";
-import { navigate, useQueryParams } from "raviger";
 import { useEffect, useState } from "react";
 import { Trans, useTranslation } from "react-i18next";
 
@@ -103,6 +104,9 @@ import { Markdown } from "@/components/ui/markdown";
 import { Separator } from "@/components/ui/separator";
 import { usePermissions } from "@/context/PermissionContext";
 import { useShortcutSubContext } from "@/context/ShortcutContext";
+import { navigate } from "@/lib/router/navigate";
+import { useQueryParams } from "@/lib/router/queryParams";
+import { appointmentShowSearch } from "@/lib/router/search/appointments";
 import { cn } from "@/lib/utils";
 import { AppointmentDateSelection } from "@/pages/Appointments/BookAppointment/AppointmentDateSelection";
 import { AppointmentSlotPicker } from "@/pages/Appointments/BookAppointment/AppointmentSlotPicker";
@@ -112,10 +116,7 @@ import { QuickAction } from "@/pages/Encounters/tabs/overview/quick-actions";
 import useCurrentFacility from "@/pages/Facility/utils/useCurrentFacility";
 import { ChargeItemServiceResource } from "@/types/billing/chargeItem/chargeItem";
 import { FacilityRead } from "@/types/facility/facility";
-import { TokenFinalStatuses, TokenStatus } from "@/types/tokens/token/token";
-import tokenApi from "@/types/tokens/token/tokenApi";
 import { ShortcutBadge } from "@/Utils/keyboardShortcutComponents";
-import { BatchRequestObject, useBatchRequest } from "@/Utils/request/batch";
 import { formatPhoneNumberIntl } from "react-phone-number-input";
 import { toast } from "sonner";
 
@@ -128,9 +129,9 @@ export default function AppointmentDetail(props: Props) {
   const queryClient = useQueryClient();
   const { facility, facilityId, isFacilityLoading } = useCurrentFacility();
   const { hasPermission } = usePermissions();
-  const [params, setQueryParams] = useQueryParams();
+  const [params, setQueryParams] = useQueryParams(appointmentShowSearch);
   const { showSuccess } = params;
-  const [{ from_queue }] = useQueryParams();
+  const [{ from_queue }] = useQueryParams(appointmentShowSearch);
 
   useShortcutSubContext("facility:appointment");
 
@@ -175,7 +176,7 @@ export default function AppointmentDetail(props: Props) {
     }
 
     // If facility is loaded but user doesn't have permission to view appointments
-    if (facility && !canViewAppointments) {
+    if (!canViewAppointments) {
       toast.error(t("no_permission_to_view_page"));
       goBack(`/facility/${facility.id}/overview`);
       return;
@@ -202,13 +203,21 @@ export default function AppointmentDetail(props: Props) {
     return <Loading />;
   }
   const currentStatus = appointment.status;
-  const encounterUrl = (encounterId: string) => {
-    const params = new URLSearchParams(
-      Object.entries(referralEncounterParams ?? {}).filter(
-        (entry): entry is [string, string] => entry[1] !== undefined,
+  const goToEncounter = (encounterId: string) => {
+    navigate({
+      to: "/facility/$facilityId/patient/$patientId/encounter/$encounterId/$tab",
+      params: {
+        facilityId,
+        patientId: appointment.patient.id,
+        encounterId,
+        tab: "updates",
+      },
+      search: Object.fromEntries(
+        Object.entries(referralEncounterParams ?? {}).filter(
+          (entry): entry is [string, string] => entry[1] !== undefined,
+        ),
       ),
-    );
-    return `/facility/${facilityId}/patient/${appointment.patient.id}/encounter/${encounterId}/updates${params.size ? `?${params}` : ""}`;
+    });
   };
 
   const canCheckIn = isWithinInterval(new Date(), {
@@ -264,10 +273,7 @@ export default function AppointmentDetail(props: Props) {
                       strong: <strong className="font-semibold" />,
                     }}
                     values={{
-                      name:
-                        (appointment &&
-                          formatScheduleResourceName(appointment)) ||
-                        "",
+                      name: formatScheduleResourceName(appointment) || "",
                       date: format(
                         appointment.token_slot.start_datetime,
                         "do MMMM",
@@ -339,6 +345,7 @@ export default function AppointmentDetail(props: Props) {
                     appointment={appointment}
                     token={appointment.token}
                     facility={facility}
+                    canWriteToken={canWriteToken}
                   />
                 </div>
               </>
@@ -460,9 +467,7 @@ export default function AppointmentDetail(props: Props) {
                       size="sm"
                       disabled={referralContextLoading}
                       onClick={() =>
-                        navigate(
-                          encounterUrl(appointment.associated_encounter!.id),
-                        )
+                        goToEncounter(appointment.associated_encounter!.id)
                       }
                       className="flex items-center gap-2"
                     >
@@ -473,9 +478,13 @@ export default function AppointmentDetail(props: Props) {
                       variant="outline"
                       size="sm"
                       onClick={() =>
-                        navigate(
-                          `/facility/${facility.id}/patient/${appointment.patient.id}`,
-                        )
+                        navigate({
+                          to: "/facility/$facilityId/patient/$patientId/{-$tab}",
+                          params: {
+                            facilityId: facility.id,
+                            patientId: appointment.patient.id,
+                          },
+                        })
                       }
                       className="flex items-center gap-2"
                     >
@@ -508,11 +517,7 @@ export default function AppointmentDetail(props: Props) {
                               status: AppointmentStatus.IN_CONSULTATION,
                               note: appointment.note,
                             });
-                            navigate(
-                              encounterUrl(
-                                appointment.associated_encounter!.id,
-                              ),
-                            );
+                            goToEncounter(appointment.associated_encounter!.id);
                           }}
                         />
                       ) : (
@@ -526,7 +531,7 @@ export default function AppointmentDetail(props: Props) {
                             appointment.token_slot.availability.schedule
                           }
                           redirectQueryParams={referralEncounterParams}
-                          defaultOpen={from_queue === "true"}
+                          defaultOpen={from_queue === true}
                           defaultStatus={EncounterStatus.IN_PROGRESS}
                           trigger={
                             <QuickAction
@@ -578,7 +583,6 @@ export default function AppointmentDetail(props: Props) {
                     icon={<PrinterIcon className="size-4" />}
                     title={t("print_appointment")}
                     actionId="print-appointment"
-                    basePath="/"
                     href={`/facility/${facilityId}/patient/${appointment.patient.id}/appointments/${appointment.id}/print`}
                   />
                 )}
@@ -586,7 +590,6 @@ export default function AppointmentDetail(props: Props) {
                   icon={<Wallet className="size-4" />}
                   title={t("accounts")}
                   actionId="goto-account"
-                  basePath="/"
                   href={`/facility/${facilityId}/billing/account?status=active&patient_filter=${appointment.patient.id}&patient_name=${encodeURIComponent(appointment.patient.name || "")}`}
                 />
               </div>
@@ -617,7 +620,6 @@ const AppointmentDetailsContent = ({
         sourceUrl={`/facility/${facility.id}/patient/${appointment.patient.id}/appointments/${appointment.id}`}
         encounterId={appointment.associated_encounter?.id}
         viewOnly={true}
-        disableCreateChargeItems
       />
       <div className="gap-4 grid grid-cols-1 md:grid-cols-2">
         <Card className="bg-white shadow-sm rounded-md p-1">
@@ -844,144 +846,49 @@ const AppointmentActions = ({
 
   const [note, setNote] = useState(appointment.note);
 
-  const { mutate: executeBatch, isPending: isPending } = useBatchRequest({
-    onSuccess: ({ results }) => {
-      if (
-        results.find((result) => result.reference_id === "cancel-appointment")
-      ) {
-        queryClient.invalidateQueries({
-          queryKey: ["appointment", appointment.id],
-        });
-        toast.success(t("appointment_cancelled"));
-      }
-      if (results.find((result) => result.reference_id === "token-cancelled")) {
-        queryClient.invalidateQueries({
-          queryKey: [
-            "infinite-tokens",
-            facilityId,
-            appointment.token?.queue.id || "",
-          ],
-        });
-        queryClient.invalidateQueries({
-          queryKey: [
-            "token-queue-summary",
-            facilityId,
-            appointment.token?.queue.id || "",
-          ],
-        });
-      }
-      if (
-        results.find(
-          (result) => result.reference_id === "reschedule-appointment",
-        )
-      ) {
+  const { mutate: cancelAppointment, isPending: isCancelling } = useMutation({
+    mutationFn: mutate(scheduleApis.appointments.cancel, {
+      pathParams: { facilityId, id: appointment.id },
+    }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["appointment", appointment.id],
+      });
+      toast.success(t("appointment_cancelled"));
+    },
+  });
+
+  const { mutate: rescheduleAppointment, isPending: isRescheduling } =
+    useMutation({
+      mutationFn: mutate(scheduleApis.appointments.reschedule, {
+        pathParams: { facilityId, id: appointment.id },
+      }),
+      onSuccess: (newAppointment: Appointment) => {
         queryClient.invalidateQueries({
           queryKey: ["appointment", appointment.id],
         });
         setIsRescheduleOpen(false);
         setSelectedSlotId(undefined);
         setRescheduleReason("");
-        const result = results.find(
-          (result) => result.reference_id === "reschedule-appointment",
-        );
-        const newAppointment = result?.data as Appointment;
-        if (newAppointment) {
-          navigate(
-            `/facility/${facilityId}/patient/${appointment.patient.id}/appointments/${newAppointment.id}`,
-          );
-        }
-      }
-      if (results.find((result) => result.reference_id === "token-cancelled")) {
-        queryClient.invalidateQueries({
-          queryKey: [
-            "infinite-tokens",
+        navigate({
+          to: "/facility/$facilityId/patient/$patientId/appointments/$appointmentId",
+          params: {
             facilityId,
-            appointment.token?.queue.id || "",
-          ],
+            patientId: appointment.patient.id,
+            appointmentId: newAppointment.id,
+          },
         });
-        queryClient.invalidateQueries({
-          queryKey: [
-            "token-queue-summary",
-            facilityId,
-            appointment.token?.queue.id || "",
-          ],
-        });
-      }
-    },
-  });
-
-  const addCancelAppointment = (reason: string, note?: string) => {
-    let requests: BatchRequestObject[] = [];
-    requests.push({
-      api: scheduleApis.appointments.cancel,
-      pathParams: {
-        facilityId,
-        id: appointment.id,
-      },
-      referenceId: "cancel-appointment",
-      body: {
-        reason: reason,
-        note: note,
       },
     });
-    if (
-      appointment.token &&
-      !TokenFinalStatuses.includes(appointment.token.status)
-    ) {
-      requests.push({
-        api: tokenApi.update,
-        pathParams: {
-          facility_id: facilityId,
-          queue_id: appointment.token.queue.id,
-          id: appointment.token.id,
-        },
-        referenceId: "token-cancelled",
-        body: {
-          note: appointment.token.note,
-          sub_queue: appointment.token.sub_queue?.id || null,
-          status: TokenStatus.CANCELLED,
-        },
-      });
-    }
-    executeBatch(requests);
-  };
 
-  const addRescheduleAppointment = () => {
-    let requests: BatchRequestObject[] = [];
-    requests.push({
-      api: scheduleApis.appointments.reschedule,
-      pathParams: {
-        facilityId,
-        id: appointment.id,
-      },
-      referenceId: "reschedule-appointment",
-      body: {
-        new_slot: selectedSlotId || "",
-        previous_booking_note: oldNote,
-        new_booking_note: newNote,
-        tags: appointment.tags.map((tag) => ({ tag: tag.id })),
-      },
+  const handleReschedule = () => {
+    if (!selectedSlotId) return;
+    rescheduleAppointment({
+      new_slot: selectedSlotId,
+      previous_booking_note: oldNote,
+      new_booking_note: newNote,
+      tags: appointment.tags.map((tag) => ({ tag: tag.id })),
     });
-    if (
-      appointment.token &&
-      !TokenFinalStatuses.includes(appointment.token.status)
-    ) {
-      requests.push({
-        api: tokenApi.update,
-        referenceId: "token-cancelled",
-        pathParams: {
-          facility_id: facilityId,
-          queue_id: appointment.token.queue.id,
-          id: appointment.token.id,
-        },
-        body: {
-          note: appointment.token.note,
-          sub_queue: appointment.token.sub_queue?.id || null,
-          status: TokenStatus.CANCELLED,
-        },
-      });
-    }
-    executeBatch(requests);
   };
 
   if (AppointmentFinalStatuses.includes(currentStatus)) {
@@ -1080,7 +987,7 @@ const AppointmentActions = ({
               onOpenChange={setIsRescheduleReasonOpen}
             >
               <AlertDialogContent className="max-h-[90dvh] overflow-y-auto">
-                <AlertDialogHeader className="min-w-0 place-items-stretch text-left sm:place-items-stretch">
+                <AlertDialogHeader className="min-w-0 place-items-stretch text-left sm:group-data-[size=default]/alert-dialog-content:place-items-stretch">
                   <AlertDialogTitle>
                     {t("reschedule_appointment")}
                   </AlertDialogTitle>
@@ -1119,43 +1026,26 @@ const AppointmentActions = ({
             </AlertDialog>
 
             <Sheet open={isRescheduleOpen} onOpenChange={setIsRescheduleOpen}>
-              <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+              <SheetContent size="lg" className="overflow-hidden">
                 <SheetHeader>
                   <SheetTitle>{t("reschedule_appointment")}</SheetTitle>
                 </SheetHeader>
 
-                <div className="mt-6 flex-1">
-                  <div className="text-sm">
-                    <div className="flex md:flex-row flex-col md:items-center justify-between mb-2 gap-2">
-                      <Label className="font-medium">
-                        {t("tags", { count: 2 })}
-                      </Label>
-                      <TagAssignmentSheet
-                        entityType="appointment"
-                        entityId={appointment.id}
-                        facilityId={facilityId}
-                        currentTags={appointment.tags}
-                        onUpdate={() => {
-                          queryClient.invalidateQueries({
-                            queryKey: ["appointment", appointment.id],
-                          });
-                        }}
-                        canWrite={true}
-                      />
-                    </div>
-                    {appointment.tags?.length > 0 ? (
-                      <p className="text-gray-600 flex flex-wrap gap-1">
-                        {appointment.tags.map((tag) => (
-                          <TagBadge key={tag.id} tag={tag} hierarchyDisplay />
-                        ))}
-                      </p>
-                    ) : (
-                      <p className="text-gray-600 md:-mt-2">
-                        {t("no_tags_assigned")}
-                      </p>
-                    )}
-                  </div>
-                  <Label>{t("note")}</Label>
+                <SheetBody>
+                  <Label className="pb-2">{t("tags", { count: 2 })}</Label>
+                  <TagAssignmentSheet
+                    entityType="appointment"
+                    entityId={appointment.id}
+                    facilityId={facilityId}
+                    currentTags={appointment.tags}
+                    onUpdate={() => {
+                      queryClient.invalidateQueries({
+                        queryKey: ["appointment", appointment.id],
+                      });
+                    }}
+                    canWrite={true}
+                  />
+                  <Label className="pt-4 mb-2">{t("note")}</Label>
                   <RichTextEditor
                     label={t("note")}
                     placeholder={t("appointment_note")}
@@ -1195,26 +1085,25 @@ const AppointmentActions = ({
                       currentAppointment={appointment}
                     />
                   </div>
-
-                  <div className="flex justify-end gap-2 mt-6">
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setIsRescheduleOpen(false);
-                        setSelectedSlotId(undefined);
-                      }}
-                    >
-                      {t("cancel")}
-                    </Button>
-                    <Button
-                      variant="default"
-                      disabled={!selectedSlotId || isPending}
-                      onClick={addRescheduleAppointment}
-                    >
-                      {isPending ? t("rescheduling") : t("reschedule")}
-                    </Button>
-                  </div>
-                </div>
+                </SheetBody>
+                <SheetFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setIsRescheduleOpen(false);
+                      setSelectedSlotId(undefined);
+                    }}
+                  >
+                    {t("cancel")}
+                  </Button>
+                  <Button
+                    variant="default"
+                    disabled={!selectedSlotId || isRescheduling}
+                    onClick={handleReschedule}
+                  >
+                    {isRescheduling ? t("rescheduling") : t("reschedule")}
+                  </Button>
+                </SheetFooter>
               </SheetContent>
             </Sheet>
           </>
@@ -1226,7 +1115,7 @@ const AppointmentActions = ({
       ) && (
         <AlertDialog open={isNoShowOpen} onOpenChange={setIsNoShowOpen}>
           <AlertDialogContent className="max-h-[90dvh] overflow-y-auto">
-            <AlertDialogHeader className="min-w-0 place-items-stretch text-left sm:place-items-stretch">
+            <AlertDialogHeader className="min-w-0 place-items-stretch text-left sm:group-data-[size=default]/alert-dialog-content:place-items-stretch">
               <AlertDialogTitle>{t("mark_as_noshow")}</AlertDialogTitle>
               <Label>{t("note")}</Label>
               <RichTextEditor
@@ -1252,7 +1141,7 @@ const AppointmentActions = ({
                     note,
                   })
                 }
-                className={cn(buttonVariants({ variant: "destructive" }))}
+                variant="destructive"
                 disabled={!hasMarkdownContent(note)}
               >
                 {isUpdating ? (
@@ -1270,7 +1159,7 @@ const AppointmentActions = ({
       {appointment.status !== AppointmentStatus.IN_CONSULTATION && (
         <AlertDialog open={isCancelOpen} onOpenChange={setIsCancelOpen}>
           <AlertDialogContent className="max-h-[90dvh] overflow-y-auto">
-            <AlertDialogHeader className="min-w-0 place-items-stretch text-left sm:place-items-stretch">
+            <AlertDialogHeader className="min-w-0 place-items-stretch text-left sm:group-data-[size=default]/alert-dialog-content:place-items-stretch">
               <AlertDialogTitle>{t("cancel_appointment")}</AlertDialogTitle>
               <Label>{t("note")}</Label>
               <RichTextEditor
@@ -1290,11 +1179,11 @@ const AppointmentActions = ({
             <AlertDialogFooter>
               <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
               <AlertDialogAction
-                onClick={() => addCancelAppointment("cancelled", note)}
-                className={cn(buttonVariants({ variant: "destructive" }))}
+                onClick={() => cancelAppointment({ reason: "cancelled", note })}
+                variant="destructive"
                 disabled={!hasMarkdownContent(note)}
               >
-                {isPending ? (
+                {isCancelling ? (
                   <Spinner className="size-4 animate-spin mr-2" />
                 ) : (
                   t("confirm")
@@ -1308,7 +1197,7 @@ const AppointmentActions = ({
       {/* Mark as Entered in Error */}
       <AlertDialog open={isErrorOpen} onOpenChange={setIsErrorOpen}>
         <AlertDialogContent className="max-h-[90dvh] overflow-y-auto">
-          <AlertDialogHeader className="min-w-0 place-items-stretch text-left sm:place-items-stretch">
+          <AlertDialogHeader className="min-w-0 place-items-stretch text-left sm:group-data-[size=default]/alert-dialog-content:place-items-stretch">
             <AlertDialogTitle>{t("mark_as_entered_in_error")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <Alert variant="destructive" className="mt-4">
@@ -1322,10 +1211,12 @@ const AppointmentActions = ({
           <AlertDialogFooter>
             <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
             <AlertDialogAction
-              onClick={() => addCancelAppointment("entered_in_error", note)}
-              className={cn(buttonVariants({ variant: "destructive" }))}
+              onClick={() =>
+                cancelAppointment({ reason: "entered_in_error", note })
+              }
+              variant="destructive"
             >
-              {isPending ? (
+              {isCancelling ? (
                 <Spinner className="size-4 animate-spin mr-2" />
               ) : (
                 t("confirm")

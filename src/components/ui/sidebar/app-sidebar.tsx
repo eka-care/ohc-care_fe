@@ -1,5 +1,5 @@
+import { Link } from "@tanstack/react-router";
 import { X } from "lucide-react";
-import { Link, useLocationChange, usePath } from "raviger";
 import * as React from "react";
 import { useTranslation } from "react-i18next";
 
@@ -31,10 +31,11 @@ import { PatientNav } from "@/components/ui/sidebar/patient-nav";
 import { ResponsibilityNav } from "@/components/ui/sidebar/responsibility-switcher";
 
 import { useRouteParams } from "@/hooks/useRouteParams";
+import { useLayoutFlags } from "@/lib/router/layoutFlags";
+import { useLocationChange } from "@/lib/router/location";
 import { ServiceSwitcher } from "./facility/service/service-switcher";
 
 import PinPageDialog from "@/components/Common/PinPageDialog";
-import { isFacilitySettingsPath } from "@/pages/Facility/settings/utils";
 import { FacilityBareMinimum } from "@/types/facility/facility";
 import { CurrentUserRead } from "@/types/user/user";
 
@@ -71,10 +72,10 @@ export function AppSidebar({
     "/facility/:facilityId/services/:serviceId",
   );
 
-  const path = usePath() ?? "";
+  const { workspace } = useLayoutFlags();
   const facilitySettingsSidebar =
     !!facilityId &&
-    isFacilitySettingsPath(path) &&
+    workspace === "settings" &&
     sidebarFor === SidebarFor.FACILITY;
 
   const facilitySidebar =
@@ -186,8 +187,7 @@ export function AppSidebar({
             )}
           >
             <Link
-              href="/"
-              basePath="/"
+              to="/"
               aria-label={t("view_dashboard")}
               className="rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
             >
@@ -263,7 +263,7 @@ export function AppSidebar({
         <SidebarRail
           aria-hidden="true"
           onMouseEnter={handleToggleMouseEnter}
-          className="fixed top-[calc(var(--app-sidebar-offset)+--spacing(2))] left-0 right-auto! visible items-center justify-center after:hidden hover:group-data-[collapsible=offcanvas]:bg-sidebar-accent group-data-[state=expanded]:hidden"
+          className="fixed top-[calc(var(--app-sidebar-offset)+(--spacing(2)))] left-0 right-auto! visible items-center justify-center after:hidden hover:group-data-[collapsible=offcanvas]:bg-sidebar-accent group-data-[state=expanded]:hidden"
         >
           <span
             aria-hidden="true"

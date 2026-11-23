@@ -9,7 +9,6 @@ import {
   Search,
   Upload,
 } from "lucide-react";
-import { Link, navigate } from "raviger";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -17,6 +16,7 @@ import { TableSkeleton } from "@/components/Common/SkeletonLoading";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { FilterSelect } from "@/components/ui/filter-select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -33,12 +33,16 @@ import { questionnaireKeys } from "@/components/QuestionnaireV2/queryKeys";
 import { useCanWriteQuestionnaire } from "@/components/QuestionnaireV2/useCanWriteQuestionnaire";
 
 import useFilters from "@/hooks/useFilters";
+import { questionnaireListSearch } from "@/lib/router/search/admin";
 
+import { HrefLink } from "@/lib/router/HrefLink";
+import { navigate } from "@/lib/router/navigate";
 import { cn } from "@/lib/utils";
 import {
   QUESTIONNAIRE_STATUSES,
   QuestionStatus,
   QuestionnaireScope,
+  SUBJECT_TYPES_FOR_CONTEXT,
 } from "@/types/questionnaire/questionnaire";
 import questionnaireApi from "@/types/questionnaire/questionnaireApi";
 import query from "@/Utils/request/query";
@@ -68,8 +72,8 @@ export function QuestionnaireListPage({
   const { canWrite: canWriteQuestionnaire, isLoading: isPermissionLoading } =
     useCanWriteQuestionnaire(scope);
   const { qParams, updateQuery, Pagination, resultsPerPage } = useFilters({
+    schema: questionnaireListSearch,
     limit: 15,
-    disableCache: true,
     defaultQueryParams: { status: "active" },
   });
 
@@ -81,6 +85,7 @@ export function QuestionnaireListPage({
         offset: ((qParams.page || 1) - 1) * resultsPerPage,
         title: qParams.search,
         status: qParams.status,
+        subject_type: qParams.subject_type,
         facility: scope.facilityId,
         auth_context: scope.authContext,
       },
@@ -136,13 +141,21 @@ export function QuestionnaireListPage({
           />
         </div>
 
+        <FilterSelect
+          value={qParams.subject_type || ""}
+          onValueChange={(subject_type) => updateQuery({ subject_type })}
+          options={SUBJECT_TYPES_FOR_CONTEXT[scope.authContext]}
+          label={t("subject_type")}
+          onClear={() => updateQuery({ subject_type: undefined })}
+        />
+
         {canWriteQuestionnaire && (
           <div className="flex w-full flex-wrap gap-2 md:ml-auto md:w-auto">
             <Button variant="outline" onClick={() => setImportOpen(true)}>
               <Upload className="size-4" />
               {t("import_questionnaire")}
             </Button>
-            <Button onClick={() => navigate(`${scope.basePath}/new`)}>
+            <Button onClick={() => navigate({ href: `${scope.basePath}/new` })}>
               <Plus className="mr-2 size-4" />
               {t("create_questionnaire")}
             </Button>
@@ -159,7 +172,9 @@ export function QuestionnaireListPage({
           description={t("adjust_questionnaire_filters")}
           action={
             canWriteQuestionnaire ? (
-              <Button onClick={() => navigate(`${scope.basePath}/new`)}>
+              <Button
+                onClick={() => navigate({ href: `${scope.basePath}/new` })}
+              >
                 <Plus className="mr-2 size-4" />
                 {t("create_questionnaire")}
               </Button>
@@ -170,15 +185,15 @@ export function QuestionnaireListPage({
         <div className="hidden md:block">
           <Table className="table-fixed">
             <TableHeader>
-              <TableRow className="bg-gray-50 hover:bg-gray-50">
-                <TableHead className="h-8 w-[30%] text-xs font-medium text-gray-500">
+              <TableRow>
+                <TableHead className="w-2/6 bg-secondary">
                   {t("title")}
                 </TableHead>
-                <TableHead className="h-8 w-[50%] text-xs font-medium text-gray-500">
-                  {t("description")}
+                <TableHead className="w-1/6 bg-secondary">
+                  {t("subject_type")}
                 </TableHead>
-                <TableHead className="h-8 w-[20%] text-xs font-medium text-gray-500">
-                  {t("slug")}
+                <TableHead className="w-4/6 bg-secondary">
+                  {t("description")}
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -190,18 +205,25 @@ export function QuestionnaireListPage({
                   tabIndex={0}
                   className="group cursor-pointer focus-visible:bg-gray-100/50 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-primary-500"
                   onClick={() =>
-                    navigate(`${scope.basePath}/${questionnaire.id}`)
+                    navigate({ href: `${scope.basePath}/${questionnaire.id}` })
                   }
                   onKeyDown={(e) => {
                     if (e.target !== e.currentTarget) return;
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      navigate(`${scope.basePath}/${questionnaire.id}`);
+                      navigate({
+                        href: `${scope.basePath}/${questionnaire.id}`,
+                      });
                     }
                   }}
                 >
                   <TableCell className="truncate font-medium">
                     {questionnaire.title}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="secondary" className="font-normal">
+                      {t(questionnaire.subject_type)}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-gray-500">
                     <div className="flex items-center justify-between gap-2">
@@ -214,21 +236,15 @@ export function QuestionnaireListPage({
                         className="invisible shrink-0 group-hover:visible"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate(`${scope.basePath}/${questionnaire.id}`);
+                          navigate({
+                            href: `${scope.basePath}/${questionnaire.id}`,
+                          });
                         }}
                       >
                         <Eye className="mr-1 size-4" />
                         {t("see_details")}
                       </Button>
                     </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant="secondary"
-                      className="max-w-full truncate font-normal"
-                    >
-                      {questionnaire.slug}
-                    </Badge>
                   </TableCell>
                 </TableRow>
               ))}
@@ -246,15 +262,15 @@ export function QuestionnaireListPage({
               asChild
               className="h-auto block rounded-lg p-4 text-left whitespace-normal"
             >
-              <Link href={`${scope.basePath}/${questionnaire.id}`} basePath="/">
+              <HrefLink href={`${scope.basePath}/${questionnaire.id}`}>
                 <p className="font-medium">{questionnaire.title}</p>
                 <p className="mt-1 line-clamp-2 text-sm text-gray-500">
                   {questionnaire.description}
                 </p>
                 <Badge variant="secondary" className="mt-2 font-normal">
-                  {questionnaire.slug}
+                  {t(questionnaire.subject_type)}
                 </Badge>
-              </Link>
+              </HrefLink>
             </Button>
           ))}
         </div>

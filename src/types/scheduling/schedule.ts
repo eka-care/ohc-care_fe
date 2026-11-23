@@ -6,7 +6,10 @@ import { Time } from "@/Utils/types";
 import { formatName } from "@/Utils/utils";
 import { ChargeItemDefinitionRead } from "@/types/billing/chargeItemDefinition/chargeItemDefinition";
 import { CareTeamMember, CareTeamResponse } from "@/types/careTeam/careTeam";
-import { EncounterListRead } from "@/types/emr/encounter/encounter";
+import {
+  EncounterClass,
+  EncounterListRead,
+} from "@/types/emr/encounter/encounter";
 import {
   PatientListRead,
   PatientRead,
@@ -33,12 +36,6 @@ export enum SchedulableResourceType {
   HealthcareService = "healthcare_service",
 }
 
-export const SCHEDULABLE_RESOURCE_TYPE_COLORS = {
-  practitioner: "blue",
-  location: "green",
-  healthcare_service: "yellow",
-} as const satisfies Record<SchedulableResourceType, string>;
-
 export interface AvailabilityDateTime {
   day_of_week: DayOfWeek;
   start_time: Time;
@@ -46,11 +43,13 @@ export interface AvailabilityDateTime {
 }
 
 /**
- * Departments and care team applied to encounters created from a schedule's
- * appointments. Only detail responses (schedule and appointment retrieve)
- * include them; list responses omit them.
+ * Encounter type, departments and care team applied to encounters created
+ * from a schedule's appointments. Only detail responses (schedule and
+ * appointment retrieve) include them; list responses omit them, except
+ * `encounter_type`, which schedule list responses also include.
  */
 export interface ScheduleEncounterDefaults {
+  encounter_type?: EncounterClass | null;
   organizations?: FacilityOrganizationRead[];
   care_team?: CareTeamResponse[];
 }
@@ -59,6 +58,7 @@ export interface ScheduleEncounterDefaults {
 export interface ScheduleEncounterDefaultsRequest {
   organizations?: string[];
   care_team?: CareTeamMember[];
+  encounter_type?: EncounterClass | null;
 }
 
 export interface ScheduleTemplate extends ScheduleEncounterDefaults {

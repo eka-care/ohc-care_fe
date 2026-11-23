@@ -1,5 +1,9 @@
 import { faker } from "@faker-js/faker";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import {
+  departmentCards,
+  selectDepartment,
+} from "tests/helper/departmentSelect";
 
 import type { UserReadMinimal } from "../../../src/types/user/user";
 import type {
@@ -21,6 +25,10 @@ interface StoredWorkspace {
   facilityId: string | null;
   departmentId: string | null;
 }
+
+// The picker's hidden native select repeats every name, so match the cards.
+const departmentCard = (scope: Locator, name: string) =>
+  departmentCards(scope).filter({ hasText: name });
 
 interface WorkspaceWrite {
   method: string;
@@ -99,8 +107,12 @@ async function addSection(page: Page, column: string, label: string) {
   await expect(picker).not.toBeVisible();
 }
 
+// The sheet is titled with the section's widget name, so find it by the
+// remove action that only the section settings sheet offers.
 function sectionSettings(page: Page) {
-  return page.getByRole("dialog", { name: "Section settings", exact: true });
+  return page.getByRole("dialog").filter({
+    has: page.getByRole("button", { name: "Remove section", exact: true }),
+  });
 }
 
 async function openSectionSettings(page: Page, name: string) {
@@ -895,9 +907,7 @@ test("visual editing builds, orders, and reloads an encounter workspace", async 
     await requestLimit.clear();
     await closeSectionSettings(page);
 
-    await page
-      .getByRole("button", { name: "One column", exact: true })
-      .click();
+    await page.getByRole("button", { name: "One column", exact: true }).click();
     await expect(
       column("Main").getByRole("article", {
         name: "Active requests",
@@ -1221,12 +1231,11 @@ test("facility configuration stays scoped and saves department access separately
 
   await test.step("Add access without dropping existing departments or saving configuration", async () => {
     await expect(
-      access.getByText(api.organizations[0].name, { exact: true }),
+      departmentCard(access, api.organizations[0].name),
     ).toBeVisible();
-    await access.getByRole("combobox").click();
-    await page
-      .getByRole("option", { name: api.organizations[1].name, exact: true })
-      .click();
+    await selectDepartment(page, access, api.organizations[1].name, {
+      multiple: true,
+    });
     await access
       .getByRole("button", { name: "Save access", exact: true })
       .click();
@@ -1245,9 +1254,7 @@ test("facility configuration stays scoped and saves department access separately
     await page.reload();
     await openGeneralSettings(page);
     for (const organization of api.organizations) {
-      await expect(
-        access.getByText(organization.name, { exact: true }),
-      ).toBeVisible();
+      await expect(departmentCard(access, organization.name)).toBeVisible();
     }
     await expect(
       access.getByRole("button", { name: "Save access", exact: true }),
@@ -1348,13 +1355,7 @@ test("department workspaces validate ownership and preserve edits after a backen
       }),
     ).toBeVisible();
     expect(api.writes).toHaveLength(0);
-    await page
-      .getByRole("combobox")
-      .filter({ hasText: "Select Department" })
-      .click();
-    await page
-      .getByRole("option", { name: api.organizations[0].name, exact: true })
-      .click();
+    await selectDepartment(page, page, api.organizations[0].name);
     await create.click();
     await page.waitForURL(new RegExp(`${basePath}/[\\da-f-]+/edit$`));
     expect(api.writes).toEqual([
@@ -1596,10 +1597,9 @@ test("the combined facility list uses server pagination and retains personal cre
     await expect(
       page.getByRole("button", { name: "Delete workspace", exact: true }),
     ).toBeVisible();
+    // Back returns to the list as it was left, page included.
     await page.getByRole("link", { name: "Back", exact: true }).click();
-    await expect(page).toHaveURL(
-      (url) => url.pathname === basePath && !url.search,
-    );
+    await expect(page).toHaveURL((url) => url.pathname === basePath);
     await page.getByRole("textbox", { name: "Search", exact: true }).fill(name);
     await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
   });
@@ -1844,7 +1844,7 @@ test("cached workspace editors refresh untouched fields and preserve unsaved edi
     await openGeneralSettings(page);
     await expect(nameField).toHaveValue(record.data.name);
     await expect(
-      access.getByText(api.organizations[0].name, { exact: true }),
+      departmentCard(access, api.organizations[0].name),
     ).toBeVisible();
     await page.getByRole("link", { name: "Back", exact: true }).click();
 
@@ -1871,7 +1871,7 @@ test("cached workspace editors refresh untouched fields and preserve unsaved edi
       .soft(templateField)
       .toHaveValue(JSON.stringify(record.data.template, null, 2));
     await expect
-      .soft(access.getByText(api.organizations[1].name, { exact: true }))
+      .soft(departmentCard(access, api.organizations[1].name))
       .toBeVisible();
   });
 
@@ -1880,8 +1880,10 @@ test("cached workspace editors refresh untouched fields and preserve unsaved edi
   await test.step("A reconnect refresh updates untouched fields while keeping pending edits", async () => {
     await nameField.fill(draftName);
     await access
-      .getByRole("button", { name: "Remove organization", exact: true })
-      .first()
+      .getByRole("button", {
+        name: `Remove ${api.organizations[0].name}`,
+        exact: true,
+      })
       .click();
 
     record.data = {
@@ -1906,11 +1908,11 @@ test("cached workspace editors refresh untouched fields and preserve unsaved edi
     await expect(templateField).toHaveValue(
       JSON.stringify(refreshedTemplate, null, 2),
     );
+    await expect(departmentCard(access, api.organizations[0].name)).toHaveCount(
+      0,
+    );
     await expect(
-      access.getByText(api.organizations[0].name, { exact: true }),
-    ).toHaveCount(0);
-    await expect(
-      access.getByText(api.organizations[1].name, { exact: true }),
+      departmentCard(access, api.organizations[1].name),
     ).toBeVisible();
   });
 
